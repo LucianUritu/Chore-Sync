@@ -16,21 +16,24 @@ The project is currently in the design phase, with a focus on building a user-fr
 
 #### Login Page
 ![Login Page](login-page.png)
+
 *The login page allows users to securely access their accounts.*
 
 #### Signup Page
 ![Signup Page](signup-page.png)
+
 *The signup page enables new users to create an account and join a group.*
 
 #### Main Page
 ![Main Page](main-page.png)
+
 *The main page provides an overview of your group's tasks, shopping lists, and notes.*
 
 > **Note**: These designs are subject to change as the project evolves.
 
 ## How to Contribute
 
-We welcome contributions to Chore Sync! If you'd like to contribute, please fork the repository, make your changes, and submit a pull request.
+We welcome contributions to Chore Sync! If you'd like to contribute, please contact me via email: lucian@uritu.net
 
 ## License
 
