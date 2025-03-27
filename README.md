@@ -17,17 +17,17 @@ The project is currently in the design phase, with a focus on building a user-fr
 #### Login Page
 ![Login Page](login-page.png)
 
-*The login page allows users to securely access their accounts.*
+**The login page allows users to securely access their accounts.**
 
 #### Signup Page
 ![Signup Page](signup-page.png)
 
-*The signup page enables new users to create an account and join a group.*
+**The signup page enables new users to create an account and join a group.**
 
 #### Main Page
-![Main Page](main-page.png)
+![Main Page](main-page.png) 
 
-*The main page provides an overview of your group's tasks, shopping lists, and notes.*
+**The main page provides an overview of your group's tasks, shopping lists, and notes.**
 
 > **Note**: These designs are subject to change as the project evolves.
 
