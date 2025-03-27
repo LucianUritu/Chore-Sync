@@ -15,7 +15,7 @@ The project is currently in the design phase, with a focus on building a user-fr
 ### UI/UX Design
 
 #### Login Page
-![Login Page](GUI Design/login-page.png)
+![Login Page](path/to/login-page.png)
 *The login page allows users to securely access their accounts.*
 
 #### Signup Page
