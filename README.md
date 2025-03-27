@@ -15,15 +15,15 @@ The project is currently in the design phase, with a focus on building a user-fr
 ### UI/UX Design
 
 #### Login Page
-![Login Page](path/to/login-page.png)
+![Login Page](login-page.png)
 *The login page allows users to securely access their accounts.*
 
 #### Signup Page
-![Signup Page](path/to/signup-page.png)
+![Signup Page](signup-page.png)
 *The signup page enables new users to create an account and join a group.*
 
 #### Main Page
-![Main Page](path/to/main-page.png)
+![Main Page](main-page.png)
 *The main page provides an overview of your group's tasks, shopping lists, and notes.*
 
 > **Note**: These designs are subject to change as the project evolves.
