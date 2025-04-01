@@ -1,14 +1,19 @@
-
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    // Redirect to our main home page
-    navigate("/");
-  }, [navigate]);
+    // Redirect based on authentication status
+    if (user) {
+      navigate("/");
+    } else {
+      navigate("/login");
+    }
+  }, [navigate, user]);
 
   return null;
 };

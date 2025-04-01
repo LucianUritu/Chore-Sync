@@ -1,13 +1,11 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import BottomNavigation from "./components/layout/BottomNavigation";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import AuthLayout from "./components/layout/AuthLayout";
 import Home from "./pages/Home";
 import Calendar from "./pages/Calendar";
 import Roommates from "./pages/Roommates";
@@ -83,7 +81,9 @@ const AppRoutes = () => {
           </ProtectedRoute>
         } 
       />
-      <Route path="*" element={<NotFound />} />
+      
+      {/* Redirect root to login if not authenticated */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 };

@@ -1,6 +1,5 @@
-
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -25,6 +24,11 @@ const formSchema = z.object({
 const Login = () => {
   const { toast } = useToast();
   const { login } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Store the intended destination (if any)
+  const from = location.state?.from || "/";
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -35,6 +39,9 @@ const Login = () => {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      // Store the intended destination
+      localStorage.setItem("redirectAfterAuth", from);
+      
       await login(values.email);
       
       toast({

@@ -1,8 +1,6 @@
-
-import React from "react";
-import { CalendarIcon, Clock, Check, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import React from 'react';
+import { Card } from '@/components/ui/card';
+import { CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 
 interface ChoreCardProps {
   title: string;
@@ -14,73 +12,53 @@ interface ChoreCardProps {
   };
   isDue?: boolean;
   isComplete?: boolean;
-  className?: string;
 }
 
-const ChoreCard = ({
+const ChoreCard: React.FC<ChoreCardProps> = ({
   title,
   dueDate,
   assignedUser,
-  isDue = false,
-  isComplete = false,
-  className,
-}: ChoreCardProps) => {
-  let statusColor = "bg-choresync-gray";
-  let statusIcon = Clock;
-  let statusText = "Upcoming";
+  isDue,
+  isComplete,
+}) => {
+  // Determine status and styling based on props
+  let statusColor = '';
+  let statusText = '';
+  let StatusIcon = Clock;
 
-  if (isDue) {
-    statusColor = "bg-choresync-red";
-    statusIcon = X;
-    statusText = "Due Today";
-  } else if (isComplete) {
-    statusColor = "bg-choresync-green";
-    statusIcon = Check;
-    statusText = "Completed";
+  if (isComplete) {
+    statusColor = 'bg-green-100 text-green-800';
+    statusText = 'Completed';
+    StatusIcon = CheckCircle;
+  } else if (isDue) {
+    statusColor = 'bg-red-100 text-red-800';
+    statusText = 'Due Today';
+    StatusIcon = AlertTriangle;
+  } else {
+    statusColor = 'bg-blue-100 text-blue-800';
+    statusText = 'Upcoming';
+    StatusIcon = Clock;
   }
 
   return (
-    <div
-      className={cn(
-        "chore-card animate-fade-in relative",
-        isDue && !isComplete ? "border-l-4 border-choresync-red" : "",
-        className
-      )}
-    >
-      <div className="flex justify-between items-start mb-3">
-        <h3 className="font-semibold text-lg pr-2">{title}</h3>
-        <div
-          className={cn(
-            "flex items-center px-2 py-1 rounded-full text-xs font-medium text-white",
-            statusColor
-          )}
-        >
-          <statusIcon size={12} className="mr-1" />
-          <span>{statusText}</span>
+    <Card className="p-4 mb-3 border-l-4 border-l-choresync-blue">
+      <div className="flex justify-between items-start mb-2">
+        <h3 className="font-medium">{title}</h3>
+        <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center ${statusColor}`}>
+          <StatusIcon size={12} className="mr-1" />
+          {statusText}
         </div>
       </div>
-
-      <div className="flex items-center text-choresync-darkGray mb-3">
-        <CalendarIcon size={14} className="mr-1" />
-        <span className="text-sm">{dueDate}</span>
-      </div>
-
-      <div className="flex justify-between items-center mt-auto">
+      <div className="flex justify-between text-xs text-gray-500 mt-2">
+        <span>Due: {dueDate}</span>
         <div className="flex items-center">
-          <Avatar className="h-6 w-6 mr-2">
-            <AvatarImage src={assignedUser.avatar} alt={assignedUser.name} />
-            <AvatarFallback className="bg-choresync-lightPurple text-white text-xs">
-              {assignedUser.initials}
-            </AvatarFallback>
-          </Avatar>
-          <span className="text-sm font-medium">{assignedUser.name}</span>
+          <div className="h-6 w-6 rounded-full bg-choresync-blue text-white flex items-center justify-center text-xs mr-1">
+            {assignedUser.initials}
+          </div>
+          <span>{assignedUser.name}</span>
         </div>
-        
-        <button className="text-choresync-blue text-sm font-medium">
-          Details
-        </button>
       </div>
-    </div>
+    </Card>
   );
 };
 

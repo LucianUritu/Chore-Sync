@@ -1,9 +1,11 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Send } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { getMessagesByFamilyId, saveMessage } from "@/services/database";
+import { format } from "date-fns";
 
-interface Message {
+interface FormattedMessage {
   id: string;
   sender: {
     name: string;
@@ -15,7 +17,7 @@ interface Message {
   isCurrentUser: boolean;
 }
 
-const ChatMessage = ({ message }: { message: Message }) => {
+const ChatMessage = ({ message }: { message: FormattedMessage }) => {
   return (
     <div
       className={`flex ${
@@ -64,69 +66,91 @@ const ChatMessage = ({ message }: { message: Message }) => {
 };
 
 const Chat = () => {
+  const { user, currentFamily } = useAuth();
   const [messageText, setMessageText] = useState("");
+  const [messages, setMessages] = useState<FormattedMessage[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const messages: Message[] = [
-    {
-      id: "1",
-      sender: {
-        name: "Jack",
-        initials: "JK",
-      },
-      text: "Hey everyone, I finished cleaning the living room!",
-      timestamp: "10:30 AM",
-      isCurrentUser: false,
-    },
-    {
-      id: "2",
-      sender: {
-        name: "Sarah",
-        initials: "SA",
-      },
-      text: "Great job! Don't forget we need to take out the trash tonight.",
-      timestamp: "10:32 AM",
-      isCurrentUser: false,
-    },
-    {
-      id: "3",
-      sender: {
-        name: "Emma",
-        initials: "EM",
-      },
-      text: "I'll take care of the trash. Can someone else help with dishes?",
-      timestamp: "10:35 AM",
-      isCurrentUser: true,
-    },
-    {
-      id: "4",
-      sender: {
-        name: "Alex",
-        initials: "AL",
-      },
-      text: "I can help with the dishes after work, around 6pm",
-      timestamp: "10:40 AM",
-      isCurrentUser: false,
-    },
-  ];
+  // Load messages when family changes
+  useEffect(() => {
+    if (!currentFamily || !user) return;
+    
+    // Get messages for current family
+    const familyMessages = getMessagesByFamilyId(currentFamily.id);
+    
+    // Format messages for display
+    const formattedMessages = familyMessages.map(msg => {
+      const sender = currentFamily.members.find(m => m.userId === msg.senderId);
+      
+      return {
+        id: msg.id,
+        sender: {
+          name: sender?.name || "Unknown",
+          initials: sender?.initials || "??",
+        },
+        text: msg.text,
+        timestamp: format(new Date(msg.timestamp), 'h:mm a'),
+        isCurrentUser: msg.senderId === user.id,
+      };
+    });
+    
+    setMessages(formattedMessages);
+  }, [currentFamily, user]);
+  
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSendMessage = () => {
-    if (messageText.trim()) {
-      console.log("Sending message:", messageText);
-      setMessageText("");
-      // In a real app, this would add the message to state and possibly send to a backend
-    }
+    if (!messageText.trim() || !user || !currentFamily) return;
+    
+    console.log("Sending message:", messageText);
+    
+    // Create new message
+    const newMessage = {
+      id: `msg-${Date.now()}`,
+      familyId: currentFamily.id,
+      senderId: user.id,
+      text: messageText,
+      timestamp: new Date().toISOString(),
+    };
+    
+    // Save message to database
+    saveMessage(newMessage);
+    
+    // Add message to state
+    setMessages([
+      ...messages,
+      {
+        id: newMessage.id,
+        sender: {
+          name: user.name,
+          initials: user.initials,
+        },
+        text: newMessage.text,
+        timestamp: format(new Date(newMessage.timestamp), 'h:mm a'),
+        isCurrentUser: true,
+      },
+    ]);
+    
+    // Clear input
+    setMessageText("");
   };
 
   return (
     <div className="flex flex-col h-screen pb-16">
       <div className="p-4 bg-white shadow-sm z-10">
-        <h1 className="text-2xl font-bold">House Chat</h1>
+        <h1 className="text-2xl font-bold">
+          {currentFamily ? `${currentFamily.name} Chat` : 'House Chat'}
+        </h1>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4">
         {messages.map((message) => (
           <ChatMessage key={message.id} message={message} />
         ))}
+        <div ref={messagesEndRef} />
       </div>
       
       <div className="p-4 bg-white border-t">
