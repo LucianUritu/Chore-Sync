@@ -1,7 +1,9 @@
+// Local storage keys
 const USERS_KEY = 'choresync_users';
 const FAMILIES_KEY = 'choresync_families';
 const CHORES_KEY = 'choresync_chores';
 const MESSAGES_KEY = 'choresync_messages';
+const SHOPPING_ITEMS_KEY = 'choresync_shopping_items';
 
 // Types
 export interface User {
@@ -41,6 +43,15 @@ export interface Message {
   timestamp: string; // ISO date string
 }
 
+export interface ShoppingItem {
+  id: string;
+  familyId: string;
+  name: string;
+  addedById: string;
+  isComplete: boolean;
+  addedAt: string; // ISO date string
+}
+
 // Initialize storage if not exists
 const initializeStorage = () => {
   if (!localStorage.getItem(USERS_KEY)) {
@@ -55,6 +66,9 @@ const initializeStorage = () => {
   if (!localStorage.getItem(MESSAGES_KEY)) {
     localStorage.setItem(MESSAGES_KEY, JSON.stringify([]));
   }
+  if (!localStorage.getItem(SHOPPING_ITEMS_KEY)) {
+    localStorage.setItem(SHOPPING_ITEMS_KEY, JSON.stringify([]));
+  }
 };
 
 // Helper to get initials from name
@@ -64,6 +78,31 @@ export const getInitials = (name: string): string => {
     .map(part => part[0])
     .join('')
     .toUpperCase();
+};
+
+// Get raw shopping items without cleanup
+const getRawShoppingItems = (): ShoppingItem[] => {
+  initializeStorage();
+  return JSON.parse(localStorage.getItem(SHOPPING_ITEMS_KEY) || '[]');
+};
+
+// Clean up completed shopping items from previous days
+export const cleanupShoppingItems = () => {
+  const items = getRawShoppingItems(); // Use getRawShoppingItems instead of getShoppingItems to avoid infinite recursion
+  const today = new Date().toDateString();
+  
+  const updatedItems = items.filter(item => {
+    // Keep incomplete items
+    if (!item.isComplete) return true;
+    
+    // Check if completed item is from a previous day
+    const itemDate = new Date(item.addedAt).toDateString();
+    return itemDate === today;
+  });
+  
+  if (updatedItems.length < items.length) {
+    localStorage.setItem(SHOPPING_ITEMS_KEY, JSON.stringify(updatedItems));
+  }
 };
 
 // User functions
@@ -205,4 +244,50 @@ export const saveMessage = (message: Message): Message => {
   messages.push(message);
   localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages));
   return message;
+};
+
+// Shopping list functions
+export const getShoppingItems = (): ShoppingItem[] => {
+  initializeStorage();
+  // Run cleanup once per session, not on every call
+  cleanupShoppingItems();
+  return getRawShoppingItems();
+};
+
+export const getShoppingItemsByFamilyId = (familyId: string): ShoppingItem[] => {
+  const items = getRawShoppingItems(); // Use the raw items without triggering cleanup
+  return items.filter(item => item.familyId === familyId);
+};
+
+export const saveShoppingItem = (item: ShoppingItem): ShoppingItem => {
+  const items = getRawShoppingItems(); // Use raw items
+  const existingIndex = items.findIndex(i => i.id === item.id);
+  
+  if (existingIndex >= 0) {
+    items[existingIndex] = item;
+  } else {
+    items.push(item);
+  }
+  
+  localStorage.setItem(SHOPPING_ITEMS_KEY, JSON.stringify(items));
+  return item;
+};
+
+export const toggleShoppingItemComplete = (itemId: string): ShoppingItem | null => {
+  const items = getRawShoppingItems(); // Use raw items
+  const itemIndex = items.findIndex(item => item.id === itemId);
+  
+  if (itemIndex >= 0) {
+    items[itemIndex].isComplete = !items[itemIndex].isComplete;
+    localStorage.setItem(SHOPPING_ITEMS_KEY, JSON.stringify(items));
+    return items[itemIndex];
+  }
+  
+  return null;
+};
+
+export const deleteShoppingItem = (itemId: string): void => {
+  const items = getRawShoppingItems(); // Use raw items
+  const updatedItems = items.filter(item => item.id !== itemId);
+  localStorage.setItem(SHOPPING_ITEMS_KEY, JSON.stringify(updatedItems));
 };

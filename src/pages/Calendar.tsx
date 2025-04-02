@@ -4,9 +4,11 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from "lucid
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
 import { getChoresByDate, toggleChoreCompletion, Chore } from "@/services/database";
 import AddChoreForm from "@/components/chores/AddChoreForm";
+import { useToast } from "@/hooks/use-toast";
 
 const Calendar = () => {
   const { currentFamily } = useAuth();
@@ -14,12 +16,11 @@ const Calendar = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [chores, setChores] = useState<Chore[]>([]);
   const [isAddChoreOpen, setIsAddChoreOpen] = useState(false);
+  const { toast } = useToast();
   
-  // Load chores whenever selected date or family changes
   useEffect(() => {
     if (!currentFamily) return;
     
-    // Get chores for the selected date
     const dateChores = getChoresByDate(
       currentFamily.id, 
       selectedDate.toISOString()
@@ -39,8 +40,6 @@ const Calendar = () => {
     return days;
   };
 
-  const weekDays = getWeekDates();
-
   const goToPreviousWeek = () => {
     setCurrentDate(addDays(currentDate, -7));
   };
@@ -54,10 +53,15 @@ const Calendar = () => {
   };
   
   const handleToggleCompletion = (choreId: string) => {
-    toggleChoreCompletion(choreId);
+    const updatedChore = toggleChoreCompletion(choreId);
     
-    // Refresh chores
-    if (currentFamily) {
+    if (updatedChore && currentFamily) {
+      toast({
+        title: updatedChore.isComplete ? "Chore marked as complete" : "Chore marked as incomplete",
+        description: updatedChore.title,
+        variant: updatedChore.isComplete ? "default" : "destructive",
+      });
+      
       const updatedChores = getChoresByDate(
         currentFamily.id, 
         selectedDate.toISOString()
@@ -73,7 +77,6 @@ const Calendar = () => {
   const handleChoreAdded = () => {
     setIsAddChoreOpen(false);
     
-    // Refresh chores
     if (currentFamily) {
       const updatedChores = getChoresByDate(
         currentFamily.id, 
@@ -98,7 +101,7 @@ const Calendar = () => {
       </div>
 
       <div className="grid grid-cols-7 gap-1 mb-6 text-center">
-        {weekDays.map((day, index) => (
+        {getWeekDates().map((day, index) => (
           <div 
             key={index} 
             className="flex flex-col items-center"
@@ -139,7 +142,6 @@ const Calendar = () => {
           </div>
         ) : (
           chores.map((chore) => {
-            // Find assigned user
             const assignedUser = currentFamily?.members.find(
               m => m.userId === chore.assignedUserId
             );
@@ -152,16 +154,17 @@ const Calendar = () => {
                 className={`p-4 ${
                   !chore.isComplete && isSameDay(parseISO(chore.dueDate), new Date()) 
                     ? 'border-l-4 border-l-red-500' 
-                    : ''
+                    : chore.isComplete
+                      ? 'border-l-4 border-l-green-500'
+                      : ''
                 }`}
-                onClick={() => handleToggleCompletion(chore.id)}
               >
                 <div className="flex items-start">
-                  <input 
-                    type="checkbox" 
+                  <Checkbox
                     checked={chore.isComplete}
-                    onChange={() => handleToggleCompletion(chore.id)}
-                    className="mr-3 mt-1 h-4 w-4"
+                    onCheckedChange={() => handleToggleCompletion(chore.id)}
+                    id={`chore-${chore.id}`}
+                    className="mr-3 mt-1"
                   />
                   <div className="flex-1">
                     <h3 className={`font-medium mb-1 ${chore.isComplete ? 'line-through text-gray-500' : ''}`}>

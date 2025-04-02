@@ -82,8 +82,8 @@ const AppRoutes = () => {
         } 
       />
       
-      {/* Redirect root to login if not authenticated */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {/* NotFound route */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };
