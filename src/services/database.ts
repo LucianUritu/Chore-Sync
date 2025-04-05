@@ -11,6 +11,7 @@ export interface User {
   email: string;
   name: string;
   initials: string;
+  password?: string; // Optional password field
   families: string[]; // Array of family IDs
   currentFamilyId: string | null;
 }
@@ -114,6 +115,11 @@ export const getUsers = (): User[] => {
 export const getUserById = (userId: string): User | null => {
   const users = getUsers();
   return users.find(user => user.id === userId) || null;
+};
+
+export const getUserByEmail = (email: string): User | null => {
+  const users = getUsers();
+  return users.find(user => user.email === email) || null;
 };
 
 export const saveUser = (user: User): User => {
@@ -290,4 +296,13 @@ export const deleteShoppingItem = (itemId: string): void => {
   const items = getRawShoppingItems(); // Use raw items
   const updatedItems = items.filter(item => item.id !== itemId);
   localStorage.setItem(SHOPPING_ITEMS_KEY, JSON.stringify(updatedItems));
+};
+
+// Auth helper functions
+export const validateUserCredentials = (email: string, password: string): User | null => {
+  const user = getUserByEmail(email);
+  if (user && user.password === password) {
+    return user;
+  }
+  return null;
 };

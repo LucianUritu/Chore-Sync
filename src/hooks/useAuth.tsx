@@ -27,6 +27,7 @@ interface User {
   email: string;
   name: string;
   initials: string;
+  password?: string; // Password is optional for backward compatibility
   families: string[];
   currentFamilyId: string | null;
 }
@@ -37,7 +38,9 @@ interface AuthContextType {
   families: Family[];
   currentFamily: Family | null;
   login: (email: string) => Promise<void>;
+  loginWithPassword: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, email: string) => Promise<void>;
+  signupWithPassword: (name: string, email: string, password: string) => Promise<boolean>;
   verifyOtp: (otp: string) => Promise<void>;
   logout: () => void;
   createFamily: (name: string) => Promise<void>;
@@ -104,6 +107,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     navigate('/verify');
   };
 
+  const loginWithPassword = async (email: string, password: string): Promise<boolean> => {
+    // Find user by email
+    const users = getUsers();
+    const existingUser = users.find(u => u.email === email);
+    
+    // If user doesn't exist or password doesn't match, return false
+    if (!existingUser || existingUser.password !== password) {
+      return false;
+    }
+    
+    // Set current user
+    setUser(existingUser);
+    localStorage.setItem('currentUserId', existingUser.id);
+    
+    // Load user's families
+    const userFamilies = getFamilies().filter(f => 
+      existingUser.families.includes(f.id)
+    );
+    setFamilies(userFamilies);
+    
+    // Set current family
+    if (existingUser.currentFamilyId) {
+      const family = userFamilies.find(f => f.id === existingUser.currentFamilyId) || null;
+      setCurrentFamily(family);
+    }
+    
+    return true;
+  };
+
   const signup = async (name: string, email: string) => {
     // Store the name and email for the verification step
     localStorage.setItem('pendingAuthEmail', email);
@@ -113,6 +145,80 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     simulateSendEmail(email);
     
     navigate('/verify');
+  };
+
+  const signupWithPassword = async (name: string, email: string, password: string): Promise<boolean> => {
+    // Check if user already exists
+    const users = getUsers();
+    const existingUser = users.find(u => u.email === email);
+    
+    if (existingUser) {
+      return false; // User already exists
+    }
+    
+    // Create user initials
+    const userInitials = getInitials(name);
+    
+    // Check if we need to create a default family
+    let allFamilies = getFamilies();
+    let defaultFamily: Family;
+    
+    if (allFamilies.length === 0) {
+      // Create a default family if none exists
+      defaultFamily = {
+        id: `f-${Date.now()}`,
+        name: `${name}'s Family`,
+        members: [{
+          userId: `u-${Date.now()}`,
+          name,
+          initials: userInitials
+        }]
+      };
+      saveFamily(defaultFamily);
+      allFamilies = [defaultFamily];
+    } else {
+      defaultFamily = allFamilies[0];
+    }
+    
+    // Create new user
+    const newUser = {
+      id: `u-${Date.now()}`,
+      email,
+      name,
+      password, // Store password
+      initials: userInitials,
+      families: [defaultFamily.id],
+      currentFamilyId: defaultFamily.id,
+    };
+    
+    // Add user to family
+    addUserToFamily(
+      newUser.id, 
+      newUser.name, 
+      newUser.initials, 
+      defaultFamily.id
+    );
+    
+    // Save new user
+    saveUser(newUser);
+    
+    // Set current user
+    setUser(newUser);
+    localStorage.setItem('currentUserId', newUser.id);
+    
+    // Load user's families
+    const userFamilies = getFamilies().filter(f => 
+      newUser.families.includes(f.id)
+    );
+    setFamilies(userFamilies);
+    
+    // Set current family
+    if (newUser.currentFamilyId) {
+      const family = userFamilies.find(f => f.id === newUser.currentFamilyId) || null;
+      setCurrentFamily(family);
+    }
+    
+    return true;
   };
 
   const verifyOtp = async (otp: string) => {
@@ -348,7 +454,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         families, 
         currentFamily, 
         login, 
+        loginWithPassword,
         signup, 
+        signupWithPassword,
         verifyOtp, 
         logout, 
         createFamily, 

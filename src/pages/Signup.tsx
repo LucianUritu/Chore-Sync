@@ -1,10 +1,9 @@
-
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { Mail, User } from "lucide-react";
+import { Mail, User, Eye, EyeOff, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,36 +20,58 @@ import { useAuth } from "@/hooks/useAuth";
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }),
   email: z.string().email({ message: "Please enter a valid email address" }),
+  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
+  confirmPassword: z.string().min(6, { message: "Confirm password must be at least 6 characters" }),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
 
 const Signup = () => {
   const { toast } = useToast();
-  const { signup } = useAuth();
+  const { signupWithPassword } = useAuth();
+  const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       email: "",
+      password: "",
+      confirmPassword: "",
     },
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      await signup(values.name, values.email);
+      const success = await signupWithPassword(values.name, values.email, values.password);
       
-      toast({
-        title: "Verification code sent",
-        description: "Check your email for the verification code.",
-      });
+      if (success) {
+        toast({
+          title: "Account created",
+          description: "Your account has been created successfully.",
+        });
+        navigate("/");
+      } else {
+        toast({
+          title: "Signup failed",
+          description: "Failed to create account. Email may already be in use.",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to send verification code. Please try again.",
+        description: "Failed to create account. Please try again.",
         variant: "destructive",
       });
     }
   };
+
+  const toggleShowPassword = () => setShowPassword(!showPassword);
+  const toggleShowConfirmPassword = () => setShowConfirmPassword(!showConfirmPassword);
 
   return (
     <div className="flex flex-col items-center justify-center h-screen px-6 bg-choresync-gray">
@@ -112,7 +133,67 @@ const Signup = () => {
                 )}
               />
 
-              <Button type="submit" className="w-full">Continue with Email</Button>
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <div className="flex items-center border rounded-md border-input focus-within:ring-2 focus-within:ring-ring">
+                        <div className="flex items-center justify-center w-10 h-10 text-gray-500">
+                          <Lock size={20} />
+                        </div>
+                        <Input
+                          placeholder="Password"
+                          type={showPassword ? "text" : "password"}
+                          className="border-0 focus-visible:ring-0"
+                          {...field}
+                        />
+                        <div 
+                          className="flex items-center justify-center w-10 h-10 text-gray-500 cursor-pointer"
+                          onClick={toggleShowPassword}
+                        >
+                          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </div>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirm Password</FormLabel>
+                    <FormControl>
+                      <div className="flex items-center border rounded-md border-input focus-within:ring-2 focus-within:ring-ring">
+                        <div className="flex items-center justify-center w-10 h-10 text-gray-500">
+                          <Lock size={20} />
+                        </div>
+                        <Input
+                          placeholder="Confirm password"
+                          type={showConfirmPassword ? "text" : "password"}
+                          className="border-0 focus-visible:ring-0"
+                          {...field}
+                        />
+                        <div 
+                          className="flex items-center justify-center w-10 h-10 text-gray-500 cursor-pointer"
+                          onClick={toggleShowConfirmPassword}
+                        >
+                          {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </div>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button type="submit" className="w-full">Sign Up</Button>
             </form>
           </Form>
 
