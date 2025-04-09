@@ -1,9 +1,8 @@
-
 import React from "react";
 import ChoreCard from "@/components/ui/ChoreCard";
 
 interface ChoreListProps {
-  title: string;
+  title?: string;
   chores: Array<{
     id: string;
     title: string;
@@ -16,9 +15,10 @@ interface ChoreListProps {
     isDue?: boolean;
     isComplete?: boolean;
   }>;
+  isToday?: boolean;
 }
 
-const ChoreList = ({ title, chores }: ChoreListProps) => {
+const ChoreList = ({ title = "Chores", chores, isToday }: ChoreListProps) => {
   return (
     <div className="mb-20">
       <div className="flex justify-between items-center mb-4">

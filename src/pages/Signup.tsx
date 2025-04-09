@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,6 +34,7 @@ const Signup = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSigningUp, setIsSigningUp] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -46,6 +48,7 @@ const Signup = () => {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      setIsSigningUp(true);
       const success = await signupWithPassword(values.name, values.email, values.password);
       
       if (success) {
@@ -61,12 +64,15 @@ const Signup = () => {
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Signup error:", error);
       toast({
         title: "Error",
-        description: "Failed to create account. Please try again.",
+        description: error?.message || "Failed to create account. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsSigningUp(false);
     }
   };
 
@@ -74,7 +80,7 @@ const Signup = () => {
   const toggleShowConfirmPassword = () => setShowConfirmPassword(!showConfirmPassword);
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen px-6 bg-choresync-gray">
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 py-12 bg-choresync-gray">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-choresync-blue">ChoreSync</h1>
@@ -193,7 +199,9 @@ const Signup = () => {
                 )}
               />
 
-              <Button type="submit" className="w-full">Sign Up</Button>
+              <Button type="submit" className="w-full" disabled={isSigningUp}>
+                {isSigningUp ? "Creating Account..." : "Sign Up"}
+              </Button>
             </form>
           </Form>
 

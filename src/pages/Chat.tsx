@@ -75,26 +75,34 @@ const Chat = () => {
   useEffect(() => {
     if (!currentFamily || !user) return;
     
-    // Get messages for current family
-    const familyMessages = getMessagesByFamilyId(currentFamily.id);
+    const loadMessages = async () => {
+      try {
+        // Get messages for current family
+        const familyMessages = await getMessagesByFamilyId(currentFamily.id);
+        
+        // Format messages for display
+        const formattedMessages = familyMessages.map(msg => {
+          const sender = currentFamily.members.find(m => m.userId === msg.senderId);
+          
+          return {
+            id: msg.id,
+            sender: {
+              name: sender?.name || "Unknown",
+              initials: sender?.initials || "??",
+            },
+            text: msg.text,
+            timestamp: format(new Date(msg.timestamp), 'h:mm a'),
+            isCurrentUser: msg.senderId === user.id,
+          };
+        });
+        
+        setMessages(formattedMessages);
+      } catch (error) {
+        console.error('Error loading messages:', error);
+      }
+    };
     
-    // Format messages for display
-    const formattedMessages = familyMessages.map(msg => {
-      const sender = currentFamily.members.find(m => m.userId === msg.senderId);
-      
-      return {
-        id: msg.id,
-        sender: {
-          name: sender?.name || "Unknown",
-          initials: sender?.initials || "??",
-        },
-        text: msg.text,
-        timestamp: format(new Date(msg.timestamp), 'h:mm a'),
-        isCurrentUser: msg.senderId === user.id,
-      };
-    });
-    
-    setMessages(formattedMessages);
+    loadMessages();
   }, [currentFamily, user]);
   
   // Scroll to bottom when messages change
@@ -102,40 +110,42 @@ const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!messageText.trim() || !user || !currentFamily) return;
     
-    console.log("Sending message:", messageText);
-    
-    // Create new message
-    const newMessage = {
-      id: `msg-${Date.now()}`,
-      familyId: currentFamily.id,
-      senderId: user.id,
-      text: messageText,
-      timestamp: new Date().toISOString(),
-    };
-    
-    // Save message to database
-    saveMessage(newMessage);
-    
-    // Add message to state
-    setMessages([
-      ...messages,
-      {
-        id: newMessage.id,
-        sender: {
-          name: user.name,
-          initials: user.initials,
+    try {
+      // Create new message
+      const newMessage = {
+        id: `msg-${Date.now()}`,
+        familyId: currentFamily.id,
+        senderId: user.id,
+        text: messageText,
+        timestamp: new Date().toISOString(),
+      };
+      
+      // Save message to database
+      await saveMessage(newMessage);
+      
+      // Add message to state
+      setMessages([
+        ...messages,
+        {
+          id: newMessage.id,
+          sender: {
+            name: user.name,
+            initials: user.initials,
+          },
+          text: newMessage.text,
+          timestamp: format(new Date(newMessage.timestamp), 'h:mm a'),
+          isCurrentUser: true,
         },
-        text: newMessage.text,
-        timestamp: format(new Date(newMessage.timestamp), 'h:mm a'),
-        isCurrentUser: true,
-      },
-    ]);
-    
-    // Clear input
-    setMessageText("");
+      ]);
+      
+      // Clear input
+      setMessageText("");
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   };
 
   return (

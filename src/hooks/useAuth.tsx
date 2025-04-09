@@ -1,15 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from "@/integration/supabase/clients";
 import { 
-  getUserById, 
-  getUsers, 
-  saveUser, 
+  getUserById,
   getFamilies,
   getFamilyById,
   saveFamily,
   addUserToFamily,
-  getInitials
+  getInitials,
+  saveUser
 } from '@/services/database';
 
 interface Family {
@@ -27,7 +27,7 @@ interface User {
   email: string;
   name: string;
   initials: string;
-  password?: string; // Password is optional for backward compatibility
+  password?: string; // Add password field as optional
   families: string[];
   currentFamilyId: string | null;
 }
@@ -58,31 +58,81 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Load user data and families on initial load
+  // Set up Supabase auth state listener
   useEffect(() => {
-    const userId = localStorage.getItem('currentUserId');
-    if (userId) {
-      const foundUser = getUserById(userId);
-      if (foundUser) {
-        setUser(foundUser);
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setIsLoading(true);
         
-        // Load families and set current family
-        const allFamilies = getFamilies();
-        const userFamilies = allFamilies.filter(f => 
-          foundUser.families.includes(f.id)
-        );
-        
-        setFamilies(userFamilies);
-        
-        if (foundUser.currentFamilyId) {
-          const currentFam = userFamilies.find(f => f.id === foundUser.currentFamilyId) || null;
-          setCurrentFamily(currentFam);
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            // Get user profile from database
+            const userProfile = await getUserById(session.user.id);
+            
+            if (userProfile) {
+              setUser(userProfile);
+              
+              // Load families and set current family
+              const allFamilies = await getFamilies();
+              const userFamilies = allFamilies.filter(f => 
+                userProfile.families.includes(f.id)
+              );
+              
+              setFamilies(userFamilies);
+              
+              if (userProfile.currentFamilyId) {
+                const currentFam = userFamilies.find(f => f.id === userProfile.currentFamilyId) || null;
+                setCurrentFamily(currentFam);
+              }
+            }
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setFamilies([]);
+          setCurrentFamily(null);
         }
-      } else {
-        localStorage.removeItem('currentUserId');
+        
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    );
+    
+    // Check current session
+    const checkCurrentSession = async () => {
+      setIsLoading(true);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // Get user profile from database
+        const userProfile = await getUserById(session.user.id);
+        
+        if (userProfile) {
+          setUser(userProfile);
+          
+          // Load families and set current family
+          const allFamilies = await getFamilies();
+          const userFamilies = allFamilies.filter(f => 
+            userProfile.families.includes(f.id)
+          );
+          
+          setFamilies(userFamilies);
+          
+          if (userProfile.currentFamilyId) {
+            const currentFam = userFamilies.find(f => f.id === userProfile.currentFamilyId) || null;
+            setCurrentFamily(currentFam);
+          }
+        }
+      }
+      
+      setIsLoading(false);
+    };
+    
+    checkCurrentSession();
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const simulateSendEmail = (email: string) => {
@@ -98,219 +148,186 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const login = async (email: string) => {
-    // Store the email for the verification step
-    localStorage.setItem('pendingAuthEmail', email);
-    
-    // Simulate sending an email with the verification code
-    simulateSendEmail(email);
-    
-    navigate('/verify');
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ 
+        email,
+        options: {
+          emailRedirectTo: window.location.origin
+        }
+      });
+      
+      if (error) throw error;
+      
+      // Store the email for the verification step
+      localStorage.setItem('pendingAuthEmail', email);
+      
+      // Simulate sending an email with the verification code
+      simulateSendEmail(email);
+      
+      navigate('/verify');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login failed",
+        description: error.message || "Failed to send verification email",
+        variant: "destructive",
+      });
+    }
   };
 
   const loginWithPassword = async (email: string, password: string): Promise<boolean> => {
-    // Find user by email
-    const users = getUsers();
-    const existingUser = users.find(u => u.email === email);
-    
-    // If user doesn't exist or password doesn't match, return false
-    if (!existingUser || existingUser.password !== password) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (error) throw error;
+      
+      // User profile and families will be loaded by the auth state listener
+      return true;
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login failed",
+        description: error.message || "Invalid email or password",
+        variant: "destructive",
+      });
       return false;
     }
-    
-    // Set current user
-    setUser(existingUser);
-    localStorage.setItem('currentUserId', existingUser.id);
-    
-    // Load user's families
-    const userFamilies = getFamilies().filter(f => 
-      existingUser.families.includes(f.id)
-    );
-    setFamilies(userFamilies);
-    
-    // Set current family
-    if (existingUser.currentFamilyId) {
-      const family = userFamilies.find(f => f.id === existingUser.currentFamilyId) || null;
-      setCurrentFamily(family);
-    }
-    
-    return true;
   };
 
   const signup = async (name: string, email: string) => {
-    // Store the name and email for the verification step
-    localStorage.setItem('pendingAuthEmail', email);
-    localStorage.setItem('pendingAuthName', name);
-    
-    // Simulate sending an email with the verification code
-    simulateSendEmail(email);
-    
-    navigate('/verify');
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ 
+        email,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: {
+            name
+          }
+        }
+      });
+      
+      if (error) throw error;
+      
+      // Store the name and email for the verification step
+      localStorage.setItem('pendingAuthEmail', email);
+      localStorage.setItem('pendingAuthName', name);
+      
+      // Simulate sending an email with the verification code
+      simulateSendEmail(email);
+      
+      navigate('/verify');
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      toast({
+        title: "Signup failed",
+        description: error.message || "Failed to send verification email",
+        variant: "destructive",
+      });
+    }
   };
 
   const signupWithPassword = async (name: string, email: string, password: string): Promise<boolean> => {
-    // Check if user already exists
-    const users = getUsers();
-    const existingUser = users.find(u => u.email === email);
-    
-    if (existingUser) {
-      return false; // User already exists
-    }
-    
-    // Create user initials
-    const userInitials = getInitials(name);
-    
-    // Check if we need to create a default family
-    let allFamilies = getFamilies();
-    let defaultFamily: Family;
-    
-    if (allFamilies.length === 0) {
-      // Create a default family if none exists
-      defaultFamily = {
-        id: `f-${Date.now()}`,
-        name: `${name}'s Family`,
-        members: [{
-          userId: `u-${Date.now()}`,
-          name,
-          initials: userInitials
-        }]
-      };
-      saveFamily(defaultFamily);
-      allFamilies = [defaultFamily];
-    } else {
-      defaultFamily = allFamilies[0];
-    }
-    
-    // Create new user
-    const newUser = {
-      id: `u-${Date.now()}`,
-      email,
-      name,
-      password, // Store password
-      initials: userInitials,
-      families: [defaultFamily.id],
-      currentFamilyId: defaultFamily.id,
-    };
-    
-    // Add user to family
-    addUserToFamily(
-      newUser.id, 
-      newUser.name, 
-      newUser.initials, 
-      defaultFamily.id
-    );
-    
-    // Save new user
-    saveUser(newUser);
-    
-    // Set current user
-    setUser(newUser);
-    localStorage.setItem('currentUserId', newUser.id);
-    
-    // Load user's families
-    const userFamilies = getFamilies().filter(f => 
-      newUser.families.includes(f.id)
-    );
-    setFamilies(userFamilies);
-    
-    // Set current family
-    if (newUser.currentFamilyId) {
-      const family = userFamilies.find(f => f.id === newUser.currentFamilyId) || null;
-      setCurrentFamily(family);
-    }
-    
-    return true;
-  };
-
-  const verifyOtp = async (otp: string) => {
-    const mockCode = localStorage.getItem('verificationCode');
-    
-    // For demonstration purposes, we'll also accept '123456' as a valid code
-    if (otp === mockCode || otp === '123456') {
-      const email = localStorage.getItem('pendingAuthEmail') || '';
-      const name = localStorage.getItem('pendingAuthName') || 'User';
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name
+          }
+        }
+      });
       
-      // Check if user already exists
-      const users = getUsers();
-      let existingUser = users.find(u => u.email === email);
+      if (error) throw error;
       
-      if (!existingUser) {
-        // Create new user if they don't exist
-        const userInitials = getInitials(name);
-        
-        // Check if we need to create a default family
-        let allFamilies = getFamilies();
+      // The trigger will create the profile, but we don't have control over the families
+      // So we'll manually handle family creation after sign up is complete
+      
+      // Wait for auth state to update
+      // The rest will be handled by the auth state listener
+      if (data.user) {
+        // If no default family exists, we'll create one
+        const allFamilies = await getFamilies();
         let defaultFamily: Family;
         
         if (allFamilies.length === 0) {
-          // Create a default family if none exists
+          // Create a default family
           defaultFamily = {
             id: `f-${Date.now()}`,
             name: `${name}'s Family`,
             members: [{
-              userId: `u-${Date.now()}`,
+              userId: data.user.id,
               name,
-              initials: userInitials
+              initials: getInitials(name)
             }]
           };
-          saveFamily(defaultFamily);
-          allFamilies = [defaultFamily];
-        } else {
-          defaultFamily = allFamilies[0];
+          
+          await saveFamily(defaultFamily);
+          
+          // Update the user's profile with the family
+          const userProfile = await getUserById(data.user.id);
+          if (userProfile) {
+            userProfile.families = [defaultFamily.id];
+            userProfile.currentFamilyId = defaultFamily.id;
+            await saveUser(userProfile);
+          }
         }
-        
-        // Create new user
-        existingUser = {
-          id: `u-${Date.now()}`,
-          email,
-          name,
-          initials: userInitials,
-          families: [defaultFamily.id],
-          currentFamilyId: defaultFamily.id,
-        };
-        
-        // Add user to family
-        addUserToFamily(
-          existingUser.id, 
-          existingUser.name, 
-          existingUser.initials, 
-          defaultFamily.id
-        );
-        
-        // Save new user
-        saveUser(existingUser);
       }
       
-      // Set current user
-      setUser(existingUser);
-      localStorage.setItem('currentUserId', existingUser.id);
-      
-      // Load user's families
-      const userFamilies = getFamilies().filter(f => 
-        existingUser?.families.includes(f.id)
-      );
-      setFamilies(userFamilies);
-      
-      // Set current family
-      if (existingUser.currentFamilyId) {
-        const family = userFamilies.find(f => f.id === existingUser?.currentFamilyId) || null;
-        setCurrentFamily(family);
-      }
-      
-      // Clean up
-      localStorage.removeItem('pendingAuthEmail');
-      localStorage.removeItem('pendingAuthName');
-      localStorage.removeItem('verificationCode');
-      
+      return true;
+    } catch (error: any) {
+      console.error('Signup error:', error);
       toast({
-        title: "Authentication Successful",
-        description: "You've been successfully logged in.",
+        title: "Signup failed",
+        description: error.message || "Failed to create account",
+        variant: "destructive",
       });
-      
-      // Check for a redirect path after authentication
-      const redirectPath = localStorage.getItem('redirectAfterAuth') || '/';
-      localStorage.removeItem('redirectAfterAuth');
-      
-      navigate(redirectPath);
+      return false;
+    }
+  };
+
+  const verifyOtp = async (otp: string) => {
+    const mockCode = localStorage.getItem('verificationCode');
+    const email = localStorage.getItem('pendingAuthEmail') || '';
+    
+    // For demonstration purposes, we'll also accept '123456' as a valid code
+    if (otp === mockCode || otp === '123456') {
+      try {
+        // In a real implementation, you'd verify the OTP with Supabase
+        // but for our demo we just sign in directly
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password: '123456' // This assumes the user was set up with this password
+        });
+        
+        if (error) throw error;
+        
+        // Clean up
+        localStorage.removeItem('pendingAuthEmail');
+        localStorage.removeItem('pendingAuthName');
+        localStorage.removeItem('verificationCode');
+        
+        toast({
+          title: "Authentication Successful",
+          description: "You've been successfully logged in.",
+        });
+        
+        // Check for a redirect path after authentication
+        const redirectPath = localStorage.getItem('redirectAfterAuth') || '/';
+        localStorage.removeItem('redirectAfterAuth');
+        
+        navigate(redirectPath);
+      } catch (error: any) {
+        console.error('Verification error:', error);
+        toast({
+          title: "Verification failed",
+          description: error.message || "Failed to verify your code",
+          variant: "destructive",
+        });
+      }
     } else {
       toast({
         title: "Invalid Code",
@@ -320,10 +337,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      console.error('Logout error:', error);
+      toast({
+        title: "Logout failed",
+        description: error.message || "Failed to logout",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setUser(null);
     setCurrentFamily(null);
-    localStorage.removeItem('currentUserId');
     navigate('/login');
   };
 
@@ -342,7 +370,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
     
     // Save the family
-    saveFamily(newFamily);
+    await saveFamily(newFamily);
     
     // Update user's families
     const updatedUser = {
@@ -351,7 +379,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       currentFamilyId: newFamily.id
     };
     
-    saveUser(updatedUser);
+    await saveUser(updatedUser);
     setUser(updatedUser);
     
     // Update families list and current family
@@ -365,7 +393,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const switchFamily = (familyId: string) => {
+  const switchFamily = async (familyId: string) => {
     if (!user) return;
     
     const family = families.find(f => f.id === familyId);
@@ -380,7 +408,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         currentFamilyId: familyId,
       };
       
-      saveUser(updatedUser);
+      await saveUser(updatedUser);
       setUser(updatedUser);
       
       toast({
@@ -395,38 +423,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     const newInitials = getInitials(newName);
     
-    // Update user
+    // Update user in Supabase
     const updatedUser = {
       ...user,
       name: newName,
       initials: newInitials
     };
     
-    saveUser(updatedUser);
+    await saveUser(updatedUser);
     setUser(updatedUser);
     
     // Update user in all families
-    const allFamilies = getFamilies();
+    const allFamilies = await getFamilies();
     const updatedFamilies = allFamilies.map(family => {
-      const updatedMembers = family.members.map(member => {
-        if (member.userId === user.id) {
-          return {
-            ...member,
-            name: newName,
-            initials: newInitials
-          };
-        }
-        return member;
-      });
+      const memberIndex = family.members.findIndex(m => m.userId === user.id);
       
-      return {
-        ...family,
-        members: updatedMembers
-      };
+      if (memberIndex >= 0) {
+        const updatedMembers = [...family.members];
+        updatedMembers[memberIndex] = {
+          ...updatedMembers[memberIndex],
+          name: newName,
+          initials: newInitials
+        };
+        
+        return {
+          ...family,
+          members: updatedMembers
+        };
+      }
+      
+      return family;
     });
     
     // Save updated families
-    updatedFamilies.forEach(family => saveFamily(family));
+    for (const family of updatedFamilies) {
+      await saveFamily(family);
+    }
     
     // Update families state
     const userFamilies = updatedFamilies.filter(f => 
@@ -476,3 +508,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

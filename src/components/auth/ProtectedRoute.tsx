@@ -11,8 +11,15 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const location = useLocation();
 
   if (isLoading) {
-    // You could add a loading spinner here
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    // Display loading spinner while checking auth status
+    return (
+      <div className="flex items-center justify-center h-screen bg-choresync-gray">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold text-choresync-blue mb-4">Loading...</h2>
+          <div className="w-16 h-16 border-4 border-t-choresync-blue border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
+      </div>
+    );
   }
 
   if (!user) {

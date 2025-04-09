@@ -42,37 +42,47 @@ const AddChoreForm = ({ onComplete }: AddChoreFormProps) => {
     },
   });
   
-  const onSubmit = (values: z.infer<typeof choreSchema>) => {
-    if (!currentFamily) return;
-    
-    // Combine date and time
-    const dueDate = new Date(values.dueDate);
-    const [hours, minutes] = values.dueTime.split(':').map(Number);
-    dueDate.setHours(hours, minutes);
-    
-    // Create new chore
-    const newChore = {
-      id: `chore-${Date.now()}`,
-      title: values.title,
-      familyId: currentFamily.id,
-      assignedUserId: values.assignedUserId,
-      dueDate: dueDate.toISOString(),
-      isComplete: false,
-      createdAt: new Date().toISOString(),
-    };
-    
-    // Save the chore
-    saveChore(newChore);
-    
-    // Show success toast
-    toast({
-      title: "Chore Added",
-      description: `${values.title} has been assigned.`,
-    });
-    
-    // Reset form and close modal
-    form.reset();
-    onComplete();
+  const onSubmit = async (values: z.infer<typeof choreSchema>) => {
+    try {
+      if (!currentFamily) return;
+      
+      // Combine date and time
+      const dueDate = new Date(values.dueDate);
+      const [hours, minutes] = values.dueTime.split(':').map(Number);
+      dueDate.setHours(hours, minutes);
+      
+      // Create new chore
+      const newChore = {
+        id: `chore-${Date.now()}`,
+        title: values.title,
+        familyId: currentFamily.id,
+        assignedUserId: values.assignedUserId,
+        dueDate: dueDate.toISOString(),
+        isComplete: false,
+        createdAt: new Date().toISOString(),
+      };
+      
+      // Save the chore
+      await saveChore(newChore);
+      
+      // Show success toast
+      toast({
+        title: "Chore Added",
+        description: `${values.title} has been assigned.`,
+      });
+      
+      // Reset form and close modal
+      form.reset();
+      onComplete();
+    } catch (error) {
+      console.error('Error adding chore:', error);
+      
+      toast({
+        title: "Error",
+        description: "Failed to add chore. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
   
   if (!currentFamily) {
