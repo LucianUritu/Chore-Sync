@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -15,7 +15,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integration/supabase/clients";
 import { useAuth } from "@/hooks/useAuth";
 
 const formSchema = z.object({
@@ -25,41 +24,9 @@ const formSchema = z.object({
 
 const Login = () => {
   const { toast } = useToast();
-  const navigate = useNavigate();
-  const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { user, families } = useAuth();
-
-  // Get the redirect path from location state or default to home
-  const from = location.state?.from || "/home";
-
-  // Check for existing session and redirect appropriately
-  useEffect(() => {
-    const checkSession = async () => {
-      // If we have user data from context, use it for redirection
-      if (user) {
-        console.log("Login: User already authenticated via context", { userId: user.id });
-        if (families && families.length > 0) {
-          console.log("Login: User has families, redirecting to home");
-          navigate("/home", { replace: true });
-        } else {
-          console.log("Login: User has no families, redirecting to family selection");
-          navigate("/family-selection", { replace: true });
-        }
-        return;
-      }
-      
-      // Direct Supabase check as backup
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        console.log("Login: User authenticated via direct check");
-        navigate("/", { replace: true }); // Let Index handle proper redirection
-      }
-    };
-    
-    checkSession();
-  }, [user, families, navigate, from]);
+  const { loginWithPassword } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -74,31 +41,17 @@ const Login = () => {
       setIsLoading(true);
       console.log("Login: Attempting login with email", values.email);
       
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: values.email,
-        password: values.password,
-      });
+      const success = await loginWithPassword(values.email, values.password);
       
-      if (error) {
-        console.error("Login error:", error);
-        toast({
-          title: "Login failed",
-          description: error.message || "Invalid email or password. Please try again.",
-          variant: "destructive",
-        });
-        return;
-      } 
-      
-      if (data?.user) {
-        console.log("Login successful for user:", data.user.id);
-        
+      if (success) {
         toast({
           title: "Login successful",
           description: "Welcome back!",
         });
-        
-        // Let the Index component handle proper redirection based on family status
-        navigate("/", { replace: true });
+      }
+      
+      if (!success) {
+        setIsLoading(false);
       }
     } catch (error: any) {
       console.error("Unexpected login error:", error);
@@ -107,7 +60,6 @@ const Login = () => {
         description: "Failed to log in. Please try again.",
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
     }
   };
