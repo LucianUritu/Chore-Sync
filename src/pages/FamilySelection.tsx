@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,28 +15,40 @@ const FamilySelection = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // If user already has a family, redirect to home
+  // Redirect logic for existing families - more aggressive check
   useEffect(() => {
-    if (!isLoading && families && families.length > 0) {
-      console.log("FamilySelection: User already has families, redirecting to home");
-      navigate("/home", { replace: true });
-    }
+    const checkFamiliesAndRedirect = () => {
+      if (!isLoading && families && families.length > 0) {
+        console.log("FamilySelection: User already has families, redirecting to home");
+        navigate("/home", { replace: true });
+      }
+    };
+    
+    checkFamiliesAndRedirect();
+    // Check again after a short delay to catch any async updates
+    const timer = setTimeout(checkFamiliesAndRedirect, 500);
+    return () => clearTimeout(timer);
   }, [isLoading, families, navigate]);
 
-  // If user is not logged in, redirect to login
+  // If user is not logged in, redirect to login - more aggressive check
   useEffect(() => {
     const checkAuth = async () => {
-      if (!isLoading && !user) {
-        // Direct check with Supabase as a backup
-        const { data } = await supabase.auth.getSession();
-        if (!data.session) {
-          console.log("FamilySelection: No user found, redirecting to login");
-          navigate("/login", { replace: true });
+      if (!isLoading) {
+        if (!user) {
+          // Direct check with Supabase as a backup
+          const { data } = await supabase.auth.getSession();
+          if (!data.session) {
+            console.log("FamilySelection: No user found, redirecting to login");
+            navigate("/login", { replace: true });
+          }
         }
       }
     };
     
     checkAuth();
+    // Check again after a short delay
+    const timer = setTimeout(checkAuth, 500);
+    return () => clearTimeout(timer);
   }, [isLoading, user, navigate]);
 
   const handleCreateFamily = async (e: React.FormEvent) => {
@@ -54,15 +65,18 @@ const FamilySelection = () => {
     try {
       setIsCreating(true);
       console.log("FamilySelection: Creating family", { name: familyName });
-      await createFamily(familyName.trim());
+      const newFamily = await createFamily(familyName.trim());
       
       toast({
         title: "Family created!",
         description: "Your family has been created successfully.",
       });
       
-      console.log("FamilySelection: Family created successfully, navigating to home");
-      navigate("/home", { replace: true });
+      if (newFamily) {
+        console.log("FamilySelection: Family created successfully, navigating to home");
+        // Ensure we're redirecting to home
+        navigate("/home", { replace: true });
+      }
     } catch (error: any) {
       console.error("FamilySelection: Error creating family", error);
       toast({

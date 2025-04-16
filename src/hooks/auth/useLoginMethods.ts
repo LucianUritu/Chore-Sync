@@ -68,6 +68,7 @@ export const useLoginMethods = ({
       // After successful login, get the user's profile and load families
       if (data.user) {
         const userProfile = await getUserById(data.user.id);
+        
         if (userProfile) {
           setUser(userProfile);
           
@@ -84,10 +85,12 @@ export const useLoginMethods = ({
             setCurrentFamily(currentFam);
           }
           
-          // Redirect based on whether user has families or not
+          // Clear navigation history and redirect based on whether user has families
           if (userFamilies.length > 0) {
+            console.log("LoginMethods: User has families, navigating to /home");
             navigate("/home", { replace: true });
           } else {
+            console.log("LoginMethods: User has no families, navigating to /family-selection");
             navigate("/family-selection", { replace: true });
           }
         }
