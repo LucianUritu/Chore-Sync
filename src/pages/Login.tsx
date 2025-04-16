@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -64,12 +63,10 @@ const Login = () => {
           title: "Login successful",
           description: "Welcome back!",
         });
-        console.log("Login successful, navigating to:", from);
-        // Force a delay to ensure auth state is updated
-        setTimeout(() => {
-          // Navigate to root and let the Index component handle further redirection
-          navigate("/", { replace: true });
-        }, 100);
+        console.log("Login successful, redirecting to home page");
+        
+        // Force Navigate to the index page which will handle redirection based on auth state
+        navigate("/", { replace: true });
       }
     } catch (error: any) {
       toast({

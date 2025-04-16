@@ -1,4 +1,3 @@
-
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,7 +8,11 @@ const Index = () => {
 
   useEffect(() => {
     if (!isLoading) {
-      console.log("Index: Auth state loaded", { user: !!user });
+      console.log("Index: Auth state loaded", { 
+        user: !!user, 
+        familiesExist: families && families.length > 0 
+      });
+      
       // Redirect based on authentication status
       if (user) {
         console.log("Index: User authenticated, checking families");
@@ -24,6 +27,8 @@ const Index = () => {
         console.log("Index: User not authenticated, navigating to /login");
         navigate("/login", { replace: true });
       }
+    } else {
+      console.log("Index: Still loading auth state...");
     }
   }, [navigate, user, isLoading, families]);
 
@@ -34,7 +39,6 @@ const Index = () => {
         <h2 className="text-2xl font-semibold text-choresync-blue mb-4">Loading...</h2>
         <div className="w-16 h-16 border-4 border-t-choresync-blue border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mx-auto"></div>
         
-        {/* Add a timeout message that appears after 5 seconds */}
         {isLoading && (
           <p className="mt-4 text-gray-600 animate-fade-in delay-5000">
             This is taking longer than usual. Please refresh if it continues.
