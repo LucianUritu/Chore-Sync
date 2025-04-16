@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { format, startOfWeek, addDays, parseISO, isSameDay } from "date-fns";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from "lucide-react";
@@ -21,12 +22,20 @@ const Calendar = () => {
   useEffect(() => {
     if (!currentFamily) return;
     
-    const dateChores = getChoresByDate(
-      currentFamily.id, 
-      selectedDate.toISOString()
-    );
+    const fetchChores = async () => {
+      try {
+        const dateChores = await getChoresByDate(
+          currentFamily.id, 
+          selectedDate.toISOString()
+        );
+        
+        setChores(dateChores);
+      } catch (error) {
+        console.error('Error fetching chores:', error);
+      }
+    };
     
-    setChores(dateChores);
+    fetchChores();
   }, [selectedDate, currentFamily]);
 
   const getWeekDates = () => {
@@ -52,21 +61,25 @@ const Calendar = () => {
     setSelectedDate(day);
   };
   
-  const handleToggleCompletion = (choreId: string) => {
-    const updatedChore = toggleChoreCompletion(choreId);
-    
-    if (updatedChore && currentFamily) {
-      toast({
-        title: updatedChore.isComplete ? "Chore marked as complete" : "Chore marked as incomplete",
-        description: updatedChore.title,
-        variant: updatedChore.isComplete ? "default" : "destructive",
-      });
+  const handleToggleCompletion = async (choreId: string) => {
+    try {
+      const updatedChore = await toggleChoreCompletion(choreId);
       
-      const updatedChores = getChoresByDate(
-        currentFamily.id, 
-        selectedDate.toISOString()
-      );
-      setChores(updatedChores);
+      if (updatedChore && currentFamily) {
+        toast({
+          title: updatedChore.isComplete ? "Chore marked as complete" : "Chore marked as incomplete",
+          description: updatedChore.title,
+          variant: updatedChore.isComplete ? "default" : "destructive",
+        });
+        
+        const updatedChores = await getChoresByDate(
+          currentFamily.id, 
+          selectedDate.toISOString()
+        );
+        setChores(updatedChores);
+      }
+    } catch (error) {
+      console.error('Error toggling chore completion:', error);
     }
   };
   
@@ -74,15 +87,19 @@ const Calendar = () => {
     setIsAddChoreOpen(true);
   };
   
-  const handleChoreAdded = () => {
+  const handleChoreAdded = async () => {
     setIsAddChoreOpen(false);
     
     if (currentFamily) {
-      const updatedChores = getChoresByDate(
-        currentFamily.id, 
-        selectedDate.toISOString()
-      );
-      setChores(updatedChores);
+      try {
+        const updatedChores = await getChoresByDate(
+          currentFamily.id, 
+          selectedDate.toISOString()
+        );
+        setChores(updatedChores);
+      } catch (error) {
+        console.error('Error updating chores after add:', error);
+      }
     }
   };
 

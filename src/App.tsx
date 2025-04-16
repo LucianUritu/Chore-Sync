@@ -14,13 +14,15 @@ import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import VerifyEmail from "./pages/VerifyEmail";
+import FamilySetup from "./pages/FamilySetup";
 import NotFound from "./pages/NotFound";
+import Index from "./pages/Index";
 
 const queryClient = new QueryClient();
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-  const showBottomNav = !["/login", "/signup", "/verify"].includes(
+  const showBottomNav = !["/login", "/signup", "/verify", "/family-setup"].includes(
     location.pathname
   );
 
@@ -35,14 +37,22 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 const AppRoutes = () => {
   return (
     <Routes>
+      {/* Root route redirects based on auth status */}
+      <Route path="/" element={<Index />} />
+      
       {/* Auth routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/verify" element={<VerifyEmail />} />
+      <Route path="/family-setup" element={
+        <ProtectedRoute>
+          <FamilySetup />
+        </ProtectedRoute>
+      } />
 
       {/* Protected routes */}
       <Route 
-        path="/" 
+        path="/home" 
         element={
           <ProtectedRoute>
             <Home />

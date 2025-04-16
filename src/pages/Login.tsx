@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integration/supabase/clients";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -29,8 +30,9 @@ const Login = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Store the intended destination (if any)
+  // We'll just redirect to / and let Index handle the redirection logic
   const from = location.state?.from || "/";
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -43,27 +45,41 @@ const Login = () => {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      const success = await loginWithPassword(values.email, values.password);
+      setIsLoading(true);
       
-      if (success) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      });
+      
+      if (error) {
+        toast({
+          title: "Login failed",
+          description: error.message || "Invalid email or password. Please try again.",
+          variant: "destructive",
+        });
+        console.error("Login error:", error);
+      } else if (data?.user) {
         toast({
           title: "Login successful",
           description: "Welcome back!",
         });
-        navigate(from);
-      } else {
-        toast({
-          title: "Login failed",
-          description: "Invalid email or password. Please try again.",
-          variant: "destructive",
-        });
+        console.log("Login successful, navigating to:", from);
+        // Force a delay to ensure auth state is updated
+        setTimeout(() => {
+          // Navigate to root and let the Index component handle further redirection
+          navigate("/", { replace: true });
+        }, 100);
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
         description: "Failed to log in. Please try again.",
         variant: "destructive",
       });
+      console.error("Unexpected login error:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -97,6 +113,7 @@ const Login = () => {
                           placeholder="your.email@example.com"
                           type="email"
                           className="border-0 focus-visible:ring-0"
+                          disabled={isLoading}
                           {...field}
                         />
                       </div>
@@ -121,6 +138,7 @@ const Login = () => {
                           placeholder="Password"
                           type={showPassword ? "text" : "password"}
                           className="border-0 focus-visible:ring-0"
+                          disabled={isLoading}
                           {...field}
                         />
                         <div 
@@ -136,8 +154,8 @@ const Login = () => {
                 )}
               />
 
-              <Button type="submit" className="w-full">
-                Login
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Logging in..." : "Login"}
               </Button>
             </form>
           </Form>
