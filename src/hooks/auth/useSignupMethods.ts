@@ -1,3 +1,4 @@
+
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integration/supabase/clients';
 import { useToast } from '@/hooks/use-toast';
@@ -78,32 +79,50 @@ export const useSignupMethods = ({
       if (error) throw error;
       
       if (data.user) {
-        // If no default family exists, we'll create one
-        const allFamilies = await getFamilies();
-        let defaultFamily: Family;
+        console.log("SignupMethods: User created, creating default family");
         
-        if (allFamilies.length === 0) {
-          // Create a default family
-          defaultFamily = {
-            id: `f-${Date.now()}`,
-            name: `${name}'s Family`,
-            members: [{
-              userId: data.user.id,
-              name,
-              initials: getInitials(name)
-            }]
-          };
-          
-          await saveFamily(defaultFamily);
-          
-          // Update the user's profile with the family
-          const userProfile = await getUserById(data.user.id);
-          if (userProfile) {
-            userProfile.families = [defaultFamily.id];
-            userProfile.currentFamilyId = defaultFamily.id;
-            await saveUser(userProfile);
-          }
-        }
+        // Always create a default family
+        const defaultFamily = {
+          id: `f-${Date.now()}`,
+          name: `${name}'s Family`,
+          members: [{
+            userId: data.user.id,
+            name,
+            initials: getInitials(name)
+          }]
+        };
+        
+        await saveFamily(defaultFamily);
+        
+        // Get the user's profile or create one if it doesn't exist
+        const userProfile = await getUserById(data.user.id) || {
+          id: data.user.id,
+          email: email,
+          name: name,
+          initials: getInitials(name),
+          families: [],
+          currentFamilyId: null
+        };
+        
+        // Update the user's profile with the family
+        userProfile.families = [defaultFamily.id];
+        userProfile.currentFamilyId = defaultFamily.id;
+        await saveUser(userProfile);
+        
+        console.log("SignupMethods: Default family created and user updated");
+        
+        // Update local state
+        setUser(userProfile);
+        setFamilies([defaultFamily]);
+        setCurrentFamily(defaultFamily);
+        
+        toast({
+          title: "Account created",
+          description: "Your account and family have been created successfully.",
+        });
+        
+        // Navigate to home instead of family selection
+        navigate("/home", { replace: true });
       }
       
       return true;

@@ -85,14 +85,9 @@ export const useLoginMethods = ({
             setCurrentFamily(currentFam);
           }
           
-          // Clear navigation history and redirect based on whether user has families
-          if (userFamilies.length > 0) {
-            console.log("LoginMethods: User has families, navigating to /home");
-            navigate("/home", { replace: true });
-          } else {
-            console.log("LoginMethods: User has no families, navigating to /family-selection");
-            navigate("/family-selection", { replace: true });
-          }
+          // Always go to home now, since every user has a family
+          console.log("LoginMethods: User logged in, navigating to /home");
+          navigate("/home", { replace: true });
         }
       }
       

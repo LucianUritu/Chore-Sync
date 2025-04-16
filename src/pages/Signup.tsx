@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,9 +53,9 @@ const Signup = () => {
       if (success) {
         toast({
           title: "Account created",
-          description: "Your account has been created successfully.",
+          description: "Your account and family have been created successfully.",
         });
-        navigate("/");
+        // We don't need to navigate here as it's handled in signupWithPassword
       } else {
         toast({
           title: "Signup failed",
