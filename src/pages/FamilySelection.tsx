@@ -1,27 +1,44 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Home } from "lucide-react";
+import { Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integration/supabase/clients";
 
-const FamilySetup = () => {
+const FamilySelection = () => {
   const { user, families, createFamily, isLoading } = useAuth();
   const [familyName, setFamilyName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // If user already has a family, redirect to home
   useEffect(() => {
-    if (!isLoading) {
-      // If user has families, redirect to home page
-      if (families && families.length > 0) {
-        navigate("/home", { replace: true });
-      }
+    if (!isLoading && families && families.length > 0) {
+      console.log("FamilySelection: User already has families, redirecting to home");
+      navigate("/home", { replace: true });
     }
   }, [isLoading, families, navigate]);
+
+  // If user is not logged in, redirect to login
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!isLoading && !user) {
+        // Direct check with Supabase as a backup
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          console.log("FamilySelection: No user found, redirecting to login");
+          navigate("/login", { replace: true });
+        }
+      }
+    };
+    
+    checkAuth();
+  }, [isLoading, user, navigate]);
 
   const handleCreateFamily = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,13 +53,18 @@ const FamilySetup = () => {
 
     try {
       setIsCreating(true);
+      console.log("FamilySelection: Creating family", { name: familyName });
       await createFamily(familyName.trim());
+      
       toast({
         title: "Family created!",
         description: "Your family has been created successfully.",
       });
+      
+      console.log("FamilySelection: Family created successfully, navigating to home");
       navigate("/home", { replace: true });
     } catch (error: any) {
+      console.error("FamilySelection: Error creating family", error);
       toast({
         title: "Error",
         description: error.message || "Failed to create family.",
@@ -114,4 +136,4 @@ const FamilySetup = () => {
   );
 };
 
-export default FamilySetup;
+export default FamilySelection;

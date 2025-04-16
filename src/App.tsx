@@ -14,7 +14,7 @@ import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import VerifyEmail from "./pages/VerifyEmail";
-import FamilySetup from "./pages/FamilySetup";
+import FamilySelection from "./pages/FamilySelection";
 import NotFound from "./pages/NotFound";
 import Index from "./pages/Index";
 
@@ -22,7 +22,7 @@ const queryClient = new QueryClient();
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-  const showBottomNav = !["/login", "/signup", "/verify", "/family-setup"].includes(
+  const showBottomNav = !["/login", "/signup", "/verify", "/family-selection"].includes(
     location.pathname
   );
 
@@ -44,11 +44,7 @@ const AppRoutes = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/verify" element={<VerifyEmail />} />
-      <Route path="/family-setup" element={
-        <ProtectedRoute>
-          <FamilySetup />
-        </ProtectedRoute>
-      } />
+      <Route path="/family-selection" element={<FamilySelection />} />
 
       {/* Protected routes */}
       <Route 

@@ -1,4 +1,3 @@
-
 import { User, Family } from '@/types/auth.types';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -7,6 +6,7 @@ import {
   saveUser,
   getInitials 
 } from '@/services/database';
+import { supabase } from '@/integration/supabase/clients';
 
 interface FamilyMethodsProps {
   user: User | null;
@@ -30,39 +30,56 @@ export const useFamilyMethods = ({
   const createFamily = async (name: string) => {
     if (!user) return;
     
-    // Create new family
-    const newFamily: Family = {
-      id: `f-${Date.now()}`,
-      name,
-      members: [{
-        userId: user.id,
-        name: user.name,
-        initials: user.initials
-      }]
-    };
-    
-    // Save the family
-    await saveFamily(newFamily);
-    
-    // Update user's families
-    const updatedUser = {
-      ...user,
-      families: [...user.families, newFamily.id],
-      currentFamilyId: newFamily.id
-    };
-    
-    await saveUser(updatedUser);
-    setUser(updatedUser);
-    
-    // Update families list and current family
-    const updatedFamilies = [...families, newFamily];
-    setFamilies(updatedFamilies);
-    setCurrentFamily(newFamily);
-    
-    toast({
-      title: "Family Created",
-      description: `${name} has been created successfully.`,
-    });
+    try {
+      console.log("Creating family for user:", user.id, "with name:", name);
+      
+      // Create new family with UUID for proper database integration
+      const newFamily: Family = {
+        id: `f-${Date.now()}`,
+        name,
+        members: [{
+          userId: user.id,
+          name: user.name,
+          initials: user.initials
+        }]
+      };
+      
+      // Save the family to Supabase
+      console.log("Saving family to Supabase:", newFamily);
+      await saveFamily(newFamily);
+      
+      // Update user's families array and current family
+      const updatedUser = {
+        ...user,
+        families: [...user.families, newFamily.id],
+        currentFamilyId: newFamily.id
+      };
+      
+      // Save updated user to Supabase
+      console.log("Updating user with new family:", updatedUser);
+      await saveUser(updatedUser);
+      setUser(updatedUser);
+      
+      // Update local state
+      const updatedFamilies = [...families, newFamily];
+      setFamilies(updatedFamilies);
+      setCurrentFamily(newFamily);
+      
+      toast({
+        title: "Family Created",
+        description: `${name} has been created successfully.`,
+      });
+      
+      return newFamily;
+    } catch (error: any) {
+      console.error("Error creating family:", error);
+      toast({
+        title: "Error Creating Family",
+        description: error.message || "Failed to create family. Please try again.",
+        variant: "destructive",
+      });
+      throw error;
+    }
   };
 
   const switchFamily = async (familyId: string) => {

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -15,8 +15,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integration/supabase/clients";
+import { useAuth } from "@/hooks/useAuth";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -25,14 +25,41 @@ const formSchema = z.object({
 
 const Login = () => {
   const { toast } = useToast();
-  const { loginWithPassword } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { user, families } = useAuth();
 
-  // We'll just redirect to / and let Index handle the redirection logic
-  const from = location.state?.from || "/";
+  // Get the redirect path from location state or default to home
+  const from = location.state?.from || "/home";
+
+  // Check for existing session and redirect appropriately
+  useEffect(() => {
+    const checkSession = async () => {
+      // If we have user data from context, use it for redirection
+      if (user) {
+        console.log("Login: User already authenticated via context", { userId: user.id });
+        if (families && families.length > 0) {
+          console.log("Login: User has families, redirecting to home");
+          navigate("/home", { replace: true });
+        } else {
+          console.log("Login: User has no families, redirecting to family selection");
+          navigate("/family-selection", { replace: true });
+        }
+        return;
+      }
+      
+      // Direct Supabase check as backup
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        console.log("Login: User authenticated via direct check");
+        navigate("/", { replace: true }); // Let Index handle proper redirection
+      }
+    };
+    
+    checkSession();
+  }, [user, families, navigate, from]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -45,6 +72,7 @@ const Login = () => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
+      console.log("Login: Attempting login with email", values.email);
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email: values.email,
@@ -52,29 +80,33 @@ const Login = () => {
       });
       
       if (error) {
+        console.error("Login error:", error);
         toast({
           title: "Login failed",
           description: error.message || "Invalid email or password. Please try again.",
           variant: "destructive",
         });
-        console.error("Login error:", error);
-      } else if (data?.user) {
+        return;
+      } 
+      
+      if (data?.user) {
+        console.log("Login successful for user:", data.user.id);
+        
         toast({
           title: "Login successful",
           description: "Welcome back!",
         });
-        console.log("Login successful, redirecting to home page");
         
-        // Force Navigate to the index page which will handle redirection based on auth state
+        // Let the Index component handle proper redirection based on family status
         navigate("/", { replace: true });
       }
     } catch (error: any) {
+      console.error("Unexpected login error:", error);
       toast({
         title: "Error",
         description: "Failed to log in. Please try again.",
         variant: "destructive",
       });
-      console.error("Unexpected login error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +115,7 @@ const Login = () => {
   const toggleShowPassword = () => setShowPassword(!showPassword);
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen px-6 bg-choresync-gray">
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 bg-choresync-gray">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-choresync-blue">ChoreSync</h1>

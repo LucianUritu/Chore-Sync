@@ -29,7 +29,7 @@ export interface Family {
     signupWithPassword: (name: string, email: string, password: string) => Promise<boolean>;
     verifyOtp: (otp: string) => Promise<void>;
     logout: () => void;
-    createFamily: (name: string) => Promise<void>;
+    createFamily: (name: string) => Promise<Family | undefined>;
     switchFamily: (familyId: string) => void;
     updateUserName: (newName: string) => Promise<void>;
   }
