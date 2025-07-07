@@ -10,7 +10,7 @@ import {
   saveFamily, 
   saveUser, 
   getInitials 
-} from '@/services/database';
+} from '@/services/supabaseDatabase';
 
 interface SignupMethodsProps {
   user: User | null;
@@ -66,6 +66,8 @@ export const useSignupMethods = ({
 
   const signupWithPassword = async (name: string, email: string, password: string): Promise<boolean> => {
     try {
+      console.log("🔵 SignupMethods: Starting signup with email:", email, "and name:", name);
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -76,26 +78,19 @@ export const useSignupMethods = ({
         }
       });
       
-      if (error) throw error;
+      console.log("🔵 SignupMethods: Supabase signup response:", { data: !!data.user, error });
+      
+      if (error) {
+        console.error("🔴 SignupMethods: Supabase signup error:", error);
+        throw error;
+      }
       
       if (data.user) {
-        console.log("SignupMethods: User created, creating default family");
+        console.log("🟢 SignupMethods: User created successfully, ID:", data.user.id);
+        console.log("🔵 SignupMethods: Creating user profile and default family in Supabase");
         
-        // Always create a default family
-        const defaultFamily = {
-          id: `f-${Date.now()}`,
-          name: `${name}'s Family`,
-          members: [{
-            userId: data.user.id,
-            name,
-            initials: getInitials(name)
-          }]
-        };
-        
-        await saveFamily(defaultFamily);
-        
-        // Get the user's profile or create one if it doesn't exist
-        const userProfile = await getUserById(data.user.id) || {
+        // Create user profile first
+        const userProfile: User = {
           id: data.user.id,
           email: email,
           name: name,
@@ -104,30 +99,56 @@ export const useSignupMethods = ({
           currentFamilyId: null
         };
         
-        // Update the user's profile with the family
+        console.log("🔵 SignupMethods: Saving user profile to Supabase:", userProfile);
+        await saveUser(userProfile);
+        console.log("🟢 SignupMethods: User profile saved successfully to Supabase");
+        
+        // Create default family
+        const defaultFamily: Family = {
+          id: crypto.randomUUID(),
+          name: `${name}'s Family`,
+          members: [{
+            userId: data.user.id,
+            name,
+            initials: getInitials(name)
+          }]
+        };
+        
+        console.log("🔵 SignupMethods: Saving default family to Supabase:", defaultFamily);
+        await saveFamily(defaultFamily);
+        console.log("🟢 SignupMethods: Default family saved successfully to Supabase");
+        
+        // Update user profile with family
         userProfile.families = [defaultFamily.id];
         userProfile.currentFamilyId = defaultFamily.id;
-        await saveUser(userProfile);
         
-        console.log("SignupMethods: Default family created and user updated");
+        console.log("🔵 SignupMethods: Updating user profile with family in Supabase:", userProfile);
+        await saveUser(userProfile);
+        console.log("🟢 SignupMethods: User profile updated with family in Supabase");
         
         // Update local state
         setUser(userProfile);
         setFamilies([defaultFamily]);
         setCurrentFamily(defaultFamily);
         
+        console.log("🟢 SignupMethods: State updated, navigating to home");
+        
         toast({
           title: "Account created",
           description: "Your account and family have been created successfully.",
         });
         
-        // Navigate to home instead of family selection
+        // Navigate to home
         navigate("/home", { replace: true });
+        
+        return true;
+      } else {
+        console.error("🔴 SignupMethods: No user returned from Supabase");
+        return false;
       }
       
-      return true;
     } catch (error: any) {
-      console.error('Signup error:', error);
+      console.error('🔴 SignupMethods: Signup error:', error);
       toast({
         title: "Signup failed",
         description: error.message || "Failed to create account",

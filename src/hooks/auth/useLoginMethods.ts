@@ -1,9 +1,9 @@
+
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integration/supabase/clients';
 import { useToast } from '@/hooks/use-toast';
 import { simulateSendEmail } from '@/utils/authUtils';
 import { User, Family } from '@/types/auth.types';
-import { getUserById, getFamilies } from '@/services/database';
 
 interface LoginMethodsProps {
   user: User | null;
@@ -36,12 +36,8 @@ export const useLoginMethods = ({
       
       if (error) throw error;
       
-      // Store the email for the verification step
       localStorage.setItem('pendingAuthEmail', email);
-      
-      // Simulate sending an email with the verification code
       simulateSendEmail(email);
-      
       navigate('/verify');
     } catch (error: any) {
       console.error('Login error:', error);
@@ -55,45 +51,68 @@ export const useLoginMethods = ({
 
   const loginWithPassword = async (email: string, password: string): Promise<boolean> => {
     try {
-      console.log("AuthMethods: Attempting login with email and password", email);
+      console.log("🔵 Starting login with email:", email);
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
-      if (error) throw error;
-      
-      console.log("AuthMethods: Login successful, user:", data.user?.id);
-      
-      // After successful login, get the user's profile and load families
-      if (data.user) {
-        const userProfile = await getUserById(data.user.id);
-        
-        if (userProfile) {
-          setUser(userProfile);
-          
-          // Load families
-          const allFamilies = await getFamilies();
-          const userFamilies = allFamilies.filter(f => 
-            userProfile.families.includes(f.id)
-          );
-          
-          setFamilies(userFamilies);
-          
-          if (userProfile.currentFamilyId) {
-            const currentFam = userFamilies.find(f => f.id === userProfile.currentFamilyId) || null;
-            setCurrentFamily(currentFam);
-          }
-          
-          // Always go to home now, since every user has a family
-          console.log("LoginMethods: User logged in, navigating to /home");
-          navigate("/home", { replace: true });
-        }
+      if (error) {
+        console.error("🔴 Supabase auth error:", error);
+        throw error;
       }
+      
+      if (!data.user) {
+        throw new Error("No user returned from login");
+      }
+      
+      console.log("🟢 Supabase login successful, user ID:", data.user.id);
+      
+      // Create user profile from auth data
+      const userName = data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User';
+      const userProfile: User = {
+        id: data.user.id,
+        email: data.user.email || email,
+        name: userName,
+        initials: userName.substring(0, 2).toUpperCase(),
+        families: [],
+        currentFamilyId: null
+      };
+      
+      // Create default family
+      const defaultFamily: Family = {
+        id: crypto.randomUUID(),
+        name: `${userName}'s Family`,
+        members: [{
+          userId: data.user.id,
+          name: userName,
+          initials: userName.substring(0, 2).toUpperCase()
+        }]
+      };
+      
+      // Update user with family
+      userProfile.families = [defaultFamily.id];
+      userProfile.currentFamilyId = defaultFamily.id;
+      
+      console.log("🟢 Setting user state and navigating to home");
+      
+      // Set states
+      setUser(userProfile);
+      setFamilies([defaultFamily]);
+      setCurrentFamily(defaultFamily);
+      
+      // Navigate to home
+      navigate("/home", { replace: true });
+      
+      toast({
+        title: "Login successful",
+        description: "Welcome back!",
+      });
       
       return true;
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('🔴 Login error:', error);
       toast({
         title: "Login failed",
         description: error.message || "Invalid email or password",

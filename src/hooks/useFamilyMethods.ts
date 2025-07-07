@@ -1,3 +1,4 @@
+
 import { User, Family } from '@/types/auth.types';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -5,8 +6,7 @@ import {
   getFamilies,
   saveUser,
   getInitials 
-} from '@/services/database';
-import { supabase } from '@/integration/supabase/clients';
+} from '@/services/supabaseDatabase';
 
 interface FamilyMethodsProps {
   user: User | null;
@@ -35,7 +35,7 @@ export const useFamilyMethods = ({
       
       // Create new family with UUID for proper database integration
       const newFamily: Family = {
-        id: `f-${Date.now()}`,
+        id: crypto.randomUUID(),
         name,
         members: [{
           userId: user.id,
@@ -91,7 +91,7 @@ export const useFamilyMethods = ({
       // Update current family
       setCurrentFamily(family);
       
-      // Update user's current family
+      // Update user's current family in Supabase
       const updatedUser = {
         ...user,
         currentFamilyId: familyId,
@@ -122,7 +122,7 @@ export const useFamilyMethods = ({
     await saveUser(updatedUser);
     setUser(updatedUser);
     
-    // Update user in all families
+    // Update user in all families in Supabase
     const allFamilies = await getFamilies();
     const updatedFamilies = allFamilies.map(family => {
       const memberIndex = family.members.findIndex(m => m.userId === user.id);
@@ -144,7 +144,7 @@ export const useFamilyMethods = ({
       return family;
     });
     
-    // Save updated families
+    // Save updated families to Supabase
     for (const family of updatedFamilies) {
       await saveFamily(family);
     }
