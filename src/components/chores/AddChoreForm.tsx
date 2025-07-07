@@ -52,15 +52,13 @@ const AddChoreForm = ({ onComplete }: AddChoreFormProps) => {
       const [hours, minutes] = values.dueTime.split(':').map(Number);
       dueDate.setHours(hours, minutes);
       
-      // Create new chore
+      // Create new chore (without id and createdAt since they're auto-generated)
       const newChore = {
-        id: `chore-${Date.now()}`,
         title: values.title,
         familyId: currentFamily.id,
         assignedUserId: values.assignedUserId,
         dueDate: dueDate.toISOString(),
         isComplete: false,
-        createdAt: new Date().toISOString(),
       };
       
       // Save the chore

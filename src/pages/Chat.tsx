@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Send } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { getMessagesByFamilyId, saveMessage } from "@/services/database";
+import { getMessagesByFamilyId, saveMessage, Message } from "@/services/database";
 import { format } from "date-fns";
 
 interface FormattedMessage {
@@ -82,7 +82,7 @@ const Chat = () => {
         const familyMessages = await getMessagesByFamilyId(currentFamily.id);
         
         // Format messages for display
-        const formattedMessages = familyMessages.map(msg => {
+        const formattedMessages = familyMessages.map((msg: Message) => {
           const sender = currentFamily.members.find(m => m.userId === msg.senderId);
           
           return {
@@ -115,32 +115,34 @@ const Chat = () => {
     if (!messageText.trim() || !user || !currentFamily) return;
     
     try {
-      // Create new message
+      // Create new message (without id and timestamp since they're auto-generated)
       const newMessage = {
-        id: `msg-${Date.now()}`,
         familyId: currentFamily.id,
         senderId: user.id,
         text: messageText,
-        timestamp: new Date().toISOString(),
       };
       
       // Save message to database
       await saveMessage(newMessage);
       
-      // Add message to state
-      setMessages([
-        ...messages,
-        {
-          id: newMessage.id,
+      // Add message to state (we'll reload messages to get the proper timestamp)
+      const updatedMessages = await getMessagesByFamilyId(currentFamily.id);
+      const formattedMessages = updatedMessages.map((msg: Message) => {
+        const sender = currentFamily.members.find(m => m.userId === msg.senderId);
+        
+        return {
+          id: msg.id,
           sender: {
-            name: user.name,
-            initials: user.initials,
+            name: sender?.name || "Unknown",
+            initials: sender?.initials || "??",
           },
-          text: newMessage.text,
-          timestamp: format(new Date(newMessage.timestamp), 'h:mm a'),
-          isCurrentUser: true,
-        },
-      ]);
+          text: msg.text,
+          timestamp: format(new Date(msg.timestamp), 'h:mm a'),
+          isCurrentUser: msg.senderId === user.id,
+        };
+      });
+      
+      setMessages(formattedMessages);
       
       // Clear input
       setMessageText("");

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Plus, Check, Circle, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -25,11 +26,19 @@ const ShoppingList = () => {
     if (!currentFamily) return;
     
     // Load shopping items for current family
-    const items = getShoppingItemsByFamilyId(currentFamily.id);
-    setShoppingItems(items);
+    const loadItems = async () => {
+      try {
+        const items = await getShoppingItemsByFamilyId(currentFamily.id);
+        setShoppingItems(items);
+      } catch (error) {
+        console.error('Error loading shopping items:', error);
+      }
+    };
+    
+    loadItems();
   }, [currentFamily]);
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!currentFamily || !user) return;
     if (!newItemName.trim()) {
       toast({
@@ -45,23 +54,32 @@ const ShoppingList = () => {
       id: `si-${Date.now()}`,
       familyId: currentFamily.id,
       name: newItemName.trim(),
-      addedById: user.id,
+      addedByUserId: user.id,
       isComplete: false,
       addedAt: new Date().toISOString(),
     };
     
-    // Save to database
-    saveShoppingItem(newItem);
-    
-    // Update local state
-    setShoppingItems(prev => [...prev, newItem]);
-    setNewItemName("");
-    setIsAddItemOpen(false);
-    
-    toast({
-      title: "Success",
-      description: "Item added to shopping list",
-    });
+    try {
+      // Save to database
+      await saveShoppingItem(newItem);
+      
+      // Update local state
+      setShoppingItems(prev => [...prev, newItem]);
+      setNewItemName("");
+      setIsAddItemOpen(false);
+      
+      toast({
+        title: "Success",
+        description: "Item added to shopping list",
+      });
+    } catch (error) {
+      console.error('Error adding shopping item:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add item",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleToggleComplete = (itemId: string) => {

@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { format, startOfWeek, addDays, parseISO, isSameDay } from "date-fns";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -7,36 +6,54 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
-import { getChoresByDate, toggleChoreCompletion, Chore } from "@/services/database";
+import { getChoresByDate, toggleChoreCompletion } from "@/services/database";
 import AddChoreForm from "@/components/chores/AddChoreForm";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const Calendar = () => {
   const { currentFamily } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [chores, setChores] = useState<Chore[]>([]);
   const [isAddChoreOpen, setIsAddChoreOpen] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
-  useEffect(() => {
-    if (!currentFamily) return;
-    
-    const fetchChores = async () => {
-      try {
-        const dateChores = await getChoresByDate(
-          currentFamily.id, 
-          selectedDate.toISOString()
-        );
+  // Query for chores on selected date
+  const { data: chores = [], isLoading } = useQuery({
+    queryKey: ['chores', currentFamily?.id, selectedDate.toISOString().split('T')[0]],
+    queryFn: () => currentFamily ? getChoresByDate(currentFamily.id, selectedDate.toISOString()) : [],
+    enabled: !!currentFamily,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchInterval: 1000 * 30, // Refetch every 30 seconds for live updates
+  });
+
+  // Mutation for toggling chore completion
+  const toggleMutation = useMutation({
+    mutationFn: toggleChoreCompletion,
+    onSuccess: (updatedChore) => {
+      if (updatedChore) {
+        toast({
+          title: updatedChore.isComplete ? "Chore marked as complete" : "Chore marked as incomplete",
+          description: updatedChore.title,
+          variant: updatedChore.isComplete ? "default" : "destructive",
+        });
         
-        setChores(dateChores);
-      } catch (error) {
-        console.error('Error fetching chores:', error);
+        // Invalidate and refetch chores
+        queryClient.invalidateQueries({ 
+          queryKey: ['chores', currentFamily?.id] 
+        });
       }
-    };
-    
-    fetchChores();
-  }, [selectedDate, currentFamily]);
+    },
+    onError: (error) => {
+      console.error('Error toggling chore completion:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update chore status",
+        variant: "destructive",
+      });
+    }
+  });
 
   const getWeekDates = () => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -62,46 +79,34 @@ const Calendar = () => {
   };
   
   const handleToggleCompletion = async (choreId: string) => {
-    try {
-      const updatedChore = await toggleChoreCompletion(choreId);
-      
-      if (updatedChore && currentFamily) {
-        toast({
-          title: updatedChore.isComplete ? "Chore marked as complete" : "Chore marked as incomplete",
-          description: updatedChore.title,
-          variant: updatedChore.isComplete ? "default" : "destructive",
-        });
-        
-        const updatedChores = await getChoresByDate(
-          currentFamily.id, 
-          selectedDate.toISOString()
-        );
-        setChores(updatedChores);
-      }
-    } catch (error) {
-      console.error('Error toggling chore completion:', error);
-    }
+    toggleMutation.mutate(choreId);
   };
   
   const handleAddChore = () => {
     setIsAddChoreOpen(true);
   };
   
-  const handleChoreAdded = async () => {
+  const handleChoreAdded = () => {
     setIsAddChoreOpen(false);
     
-    if (currentFamily) {
-      try {
-        const updatedChores = await getChoresByDate(
-          currentFamily.id, 
-          selectedDate.toISOString()
-        );
-        setChores(updatedChores);
-      } catch (error) {
-        console.error('Error updating chores after add:', error);
-      }
-    }
+    // Invalidate and refetch chores after adding new one
+    queryClient.invalidateQueries({ 
+      queryKey: ['chores', currentFamily?.id] 
+    });
   };
+
+  if (isLoading) {
+    return (
+      <div className="container max-w-md mx-auto p-4 pb-20">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="w-8 h-8 border-2 border-t-choresync-blue border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <p className="text-gray-500">Loading chores...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container max-w-md mx-auto p-4 pb-20">
@@ -182,6 +187,7 @@ const Calendar = () => {
                     onCheckedChange={() => handleToggleCompletion(chore.id)}
                     id={`chore-${chore.id}`}
                     className="mr-3 mt-1"
+                    disabled={toggleMutation.isPending}
                   />
                   <div className="flex-1">
                     <h3 className={`font-medium mb-1 ${chore.isComplete ? 'line-through text-gray-500' : ''}`}>

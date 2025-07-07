@@ -1,59 +1,46 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Chore, getChoresByFamilyId, toggleChoreCompletion } from "@/services/database";
+import { getChoresByFamilyId, toggleChoreCompletion } from "@/services/database";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Circle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Chore } from "@/services/database";
 
 const Roommates = () => {
   const { currentFamily, user } = useAuth();
   const { toast } = useToast();
-  const [chores, setChores] = useState<Chore[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const fetchChores = async () => {
-      if (!currentFamily) return;
-      
-      setIsLoading(true);
-      try {
-        const fetchedChores = await getChoresByFamilyId(currentFamily.id);
-        setChores(fetchedChores);
-      } catch (error) {
-        console.error("Error fetching chores:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load chores. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Query for all family chores
+  const { data: chores = [], isLoading } = useQuery({
+    queryKey: ['chores', currentFamily?.id],
+    queryFn: () => currentFamily ? getChoresByFamilyId(currentFamily.id) : [],
+    enabled: !!currentFamily,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchInterval: 1000 * 30, // Refetch every 30 seconds for live updates
+  });
 
-    fetchChores();
-  }, [currentFamily, toast]);
-
-  const handleToggleComplete = async (choreId: string) => {
-    try {
-      const updatedChore = await toggleChoreCompletion(choreId);
+  // Mutation for toggling chore completion
+  const toggleMutation = useMutation({
+    mutationFn: toggleChoreCompletion,
+    onSuccess: (updatedChore) => {
       if (updatedChore) {
-        // Update the local state with the updated chore
-        setChores(prevChores => 
-          prevChores.map(chore => 
-            chore.id === choreId ? updatedChore : chore
-          )
-        );
-
         toast({
           title: updatedChore.isComplete ? "Chore completed" : "Chore marked incomplete",
           description: `${updatedChore.title} has been updated.`,
         });
+        
+        // Invalidate and refetch chores
+        queryClient.invalidateQueries({ 
+          queryKey: ['chores', currentFamily?.id] 
+        });
       }
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Error toggling chore completion:", error);
       toast({
         title: "Error",
@@ -61,6 +48,10 @@ const Roommates = () => {
         variant: "destructive",
       });
     }
+  });
+
+  const handleToggleComplete = async (choreId: string) => {
+    toggleMutation.mutate(choreId);
   };
 
   // Filter chores based on active tab
@@ -128,7 +119,8 @@ const Roommates = () => {
                   <ChoreItem 
                     key={chore.id} 
                     chore={chore} 
-                    onToggleComplete={handleToggleComplete} 
+                    onToggleComplete={handleToggleComplete}
+                    isLoading={toggleMutation.isPending}
                   />
                 ))}
               </div>
@@ -148,7 +140,8 @@ const Roommates = () => {
               <ChoreItem 
                 key={chore.id} 
                 chore={chore} 
-                onToggleComplete={handleToggleComplete} 
+                onToggleComplete={handleToggleComplete}
+                isLoading={toggleMutation.isPending}
               />
             ))
           ) : (
@@ -169,7 +162,8 @@ const Roommates = () => {
                     <ChoreItem 
                       key={chore.id} 
                       chore={chore} 
-                      onToggleComplete={handleToggleComplete} 
+                      onToggleComplete={handleToggleComplete}
+                      isLoading={toggleMutation.isPending}
                     />
                   ))}
                 </div>
@@ -193,17 +187,13 @@ const Roommates = () => {
 type ChoreItemProps = {
   chore: Chore;
   onToggleComplete: (choreId: string) => Promise<void>;
+  isLoading?: boolean;
 };
 
-const ChoreItem = ({ chore, onToggleComplete }: ChoreItemProps) => {
-  const [isLoading, setIsLoading] = useState(false);
-  
+const ChoreItem = ({ chore, onToggleComplete, isLoading = false }: ChoreItemProps) => {
   const handleToggle = async () => {
-    setIsLoading(true);
-    try {
+    if (!isLoading) {
       await onToggleComplete(chore.id);
-    } finally {
-      setIsLoading(false);
     }
   };
   

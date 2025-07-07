@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { AuthContextType } from '@/types/auth.types';
 import { useAuthState } from '@/hooks/useAuthState';
-import { useAuthMethods } from '@/hooks/useAuthMethods';
+import { useAuthMethods } from '@/hooks/auth/useAuthMethods';
 import { useFamilyMethods } from '@/hooks/useFamilyMethods';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

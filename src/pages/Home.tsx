@@ -1,41 +1,33 @@
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import ChoreList from "@/components/home/ChoreList";
 import HomeHeader from "@/components/home/HomeHeader";
 import StatusOverview from "@/components/home/StatusOverview";
 import { useAuth } from "@/hooks/useAuth";
-import { Chore, ShoppingItem, getChoresByFamilyId, getShoppingItemsByFamilyId } from "@/services/database";
+import { getChoresByFamilyId, getShoppingItemsByFamilyId } from "@/services/database";
+import { useQuery } from "@tanstack/react-query";
 
 const Home = () => {
   const { user, currentFamily } = useAuth();
-  const [chores, setChores] = useState<Chore[]>([]);
-  const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch chores and shopping items
-  useEffect(() => {
-    const loadData = async () => {
-      if (currentFamily) {
-        setIsLoading(true);
-        
-        try {
-          // Fetch and set chores
-          const fetchedChores = await getChoresByFamilyId(currentFamily.id);
-          setChores(fetchedChores);
-          
-          // Fetch and set shopping items
-          const fetchedItems = await getShoppingItemsByFamilyId(currentFamily.id);
-          setShoppingItems(fetchedItems);
-        } catch (error) {
-          console.error("Error loading data:", error);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-    
-    loadData();
-  }, [currentFamily]);
+  // Query for chores
+  const { data: chores = [], isLoading: choreLoading } = useQuery({
+    queryKey: ['chores', currentFamily?.id],
+    queryFn: () => currentFamily ? getChoresByFamilyId(currentFamily.id) : [],
+    enabled: !!currentFamily,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchInterval: 1000 * 30, // Refetch every 30 seconds for live updates
+  });
+
+  // Query for shopping items
+  const { data: shoppingItems = [], isLoading: shoppingLoading } = useQuery({
+    queryKey: ['shopping-items', currentFamily?.id],
+    queryFn: () => currentFamily ? getShoppingItemsByFamilyId(currentFamily.id) : [],
+    enabled: !!currentFamily,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  const isLoading = choreLoading || shoppingLoading;
   
   // Calculate completed and total chores
   const completedChores = chores.filter(chore => chore.isComplete).length;

@@ -1,3 +1,4 @@
+
 export type Json =
   | string
   | number
@@ -24,7 +25,7 @@ export type Database = {
           created_at?: string
           due_date: string
           family_id: string
-          id: string
+          id?: string
           is_complete?: boolean
           title: string
         }
@@ -52,16 +53,19 @@ export type Database = {
           id: string
           members: Json
           name: string
+          join_code: string | null
         }
         Insert: {
-          id: string
+          id?: string
           members?: Json
           name: string
+          join_code?: string | null
         }
         Update: {
           id?: string
           members?: Json
           name?: string
+          join_code?: string | null
         }
         Relationships: []
       }
@@ -75,7 +79,7 @@ export type Database = {
         }
         Insert: {
           family_id: string
-          id: string
+          id?: string
           sender_id: string
           text: string
           timestamp?: string
@@ -110,7 +114,7 @@ export type Database = {
           current_family_id?: string | null
           email: string
           families?: string[] | null
-          id: string
+          id?: string
           initials: string
           name: string
         }
@@ -137,7 +141,7 @@ export type Database = {
           added_at?: string
           added_by_id: string
           family_id: string
-          id: string
+          id?: string
           is_complete?: boolean
           name: string
         }
