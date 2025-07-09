@@ -21,10 +21,12 @@ export const useAuthState = () => {
   // Set up Supabase auth state listener
   useEffect(() => {
     isMounted.current = true;
+    console.log("🔵 Setting up auth state listener");
 
-    // Set up auth state listener with all events
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!isMounted.current) return;
         console.log('🔵 Auth event received:', event);
         await handleAuthStateChange(event, session, isMounted);
       }
@@ -34,14 +36,15 @@ export const useAuthState = () => {
     checkCurrentSession(isMounted);
     
     return () => {
+      console.log('🔴 Cleaning up auth state listener');
       isMounted.current = false;
       subscription.unsubscribe();
     };
-  }, [handleAuthStateChange, checkCurrentSession]);
+  }, []); // Remove dependencies to prevent re-initialization
 
   // Set up real-time subscription for user profile changes
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !isMounted.current) return;
 
     console.log('🔵 Setting up real-time profile subscription for user:', user.id);
 
@@ -56,46 +59,52 @@ export const useAuthState = () => {
           filter: `id=eq.${user.id}`
         },
         async (payload) => {
+          if (!isMounted.current) return;
+          
           console.log('🟢 Profile updated in real-time:', payload.new);
           
-          const updatedProfile = payload.new as any;
-          const updatedUser: User = {
-            id: updatedProfile.id,
-            email: updatedProfile.email,
-            name: updatedProfile.name,
-            initials: updatedProfile.initials,
-            families: Array.isArray(updatedProfile.families) ? updatedProfile.families : [],
-            currentFamilyId: updatedProfile.current_family_id
-          };
+          try {
+            const updatedProfile = payload.new as any;
+            const updatedUser: User = {
+              id: updatedProfile.id,
+              email: updatedProfile.email,
+              name: updatedProfile.name,
+              initials: updatedProfile.initials,
+              families: Array.isArray(updatedProfile.families) ? updatedProfile.families : [],
+              currentFamilyId: updatedProfile.current_family_id
+            };
 
-          setUser(updatedUser);
+            setUser(updatedUser);
 
-          // Reload families if they changed
-          if (updatedUser.families && updatedUser.families.length > 0) {
-            const { data: userFamilies } = await supabase
-              .from('families')
-              .select('*')
-              .in('id', updatedUser.families);
+            // Reload families if they changed
+            if (updatedUser.families && updatedUser.families.length > 0) {
+              const { data: userFamilies } = await supabase
+                .from('families')
+                .select('*')
+                .in('id', updatedUser.families);
 
-            if (userFamilies) {
-              const refreshedFamilies = userFamilies.map(family => ({
-                id: family.id,
-                name: family.name,
-                members: Array.isArray(family.members) 
-                  ? (family.members as Array<{userId: string; name: string; initials: string}>)
-                  : []
-              }));
+              if (userFamilies && isMounted.current) {
+                const refreshedFamilies = userFamilies.map(family => ({
+                  id: family.id,
+                  name: family.name,
+                  members: Array.isArray(family.members) 
+                    ? (family.members as Array<{userId: string; name: string; initials: string}>)
+                    : []
+                }));
 
-              const refreshedCurrentFamily = updatedUser.currentFamilyId 
-                ? refreshedFamilies.find(f => f.id === updatedUser.currentFamilyId) || null
-                : null;
+                const refreshedCurrentFamily = updatedUser.currentFamilyId 
+                  ? refreshedFamilies.find(f => f.id === updatedUser.currentFamilyId) || null
+                  : null;
 
-              setFamilies(refreshedFamilies);
-              setCurrentFamily(refreshedCurrentFamily);
+                setFamilies(refreshedFamilies);
+                setCurrentFamily(refreshedCurrentFamily);
+              }
+            } else if (isMounted.current) {
+              setFamilies([]);
+              setCurrentFamily(null);
             }
-          } else {
-            setFamilies([]);
-            setCurrentFamily(null);
+          } catch (error) {
+            console.error('🔴 Error processing real-time update:', error);
           }
         }
       )

@@ -48,9 +48,6 @@ export const useAuthStateHandler = ({
       console.error('🔴 Error in auth state change:', error);
       if (isMounted.current) {
         setIsLoading(false);
-        setUser(null);
-        setFamilies([]);
-        setCurrentFamily(null);
       }
     }
   };
@@ -59,77 +56,34 @@ export const useAuthStateHandler = ({
     if (!isMounted.current) return;
     
     try {
-      console.log("🔵 Loading user profile from database for:", authUser.id);
+      console.log("🔵 Creating or loading user profile for:", authUser.id);
       
-      // Always fetch fresh user profile from database
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error('🔴 Error fetching profile:', profileError);
-        throw profileError;
-      }
-
-      let userProfile: User;
-
-      if (profileData) {
-        userProfile = {
-          id: profileData.id,
-          email: profileData.email,
-          name: profileData.name,
-          initials: profileData.initials,
-          families: Array.isArray(profileData.families) ? profileData.families : [],
-          currentFamilyId: profileData.current_family_id
-        };
-        console.log("🟢 User profile loaded from database:", {
-          id: userProfile.id,
-          name: userProfile.name,
-          familiesCount: userProfile.families?.length || 0,
-          currentFamilyId: userProfile.currentFamilyId
-        });
-      } else {
-        // Create new profile if doesn't exist
-        const userName = authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User';
-        const newUserData = {
-          id: authUser.id,
-          email: authUser.email || '',
-          name: userName,
-          initials: userName.substring(0, 2).toUpperCase(),
-          families: [],
-          current_family_id: null
-        };
-
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert(newUserData);
-
-        if (insertError) {
-          console.error('🔴 Error creating profile:', insertError);
+      // Use the existing createOrLoadUserProfile function
+      const userProfile = await createOrLoadUserProfile(authUser);
+      
+      if (!isMounted.current || !userProfile) {
+        console.log("🔴 Component unmounted or no user profile");
+        if (isMounted.current) {
+          setIsLoading(false);
         }
-
-        userProfile = {
-          id: newUserData.id,
-          email: newUserData.email,
-          name: newUserData.name,
-          initials: newUserData.initials,
-          families: newUserData.families,
-          currentFamilyId: newUserData.current_family_id
-        };
+        return;
       }
       
-      if (!isMounted.current) return;
+      console.log("🟢 User profile loaded:", {
+        id: userProfile.id,
+        name: userProfile.name,
+        familiesCount: userProfile.families?.length || 0
+      });
+      
       setUser(userProfile);
 
-      // Load families from database
-      console.log("🔵 Loading families from database...");
+      // Load families
+      console.log("🔵 Loading families...");
       const { families, currentFamily } = await loadUserFamilies(userProfile);
       
       if (!isMounted.current) return;
       
-      console.log("🟢 Families loaded from database:", { 
+      console.log("🟢 Families loaded:", { 
         familiesCount: families.length, 
         currentFamily: currentFamily?.name || 'none'
       });
@@ -137,18 +91,12 @@ export const useAuthStateHandler = ({
       setFamilies(families || []);
       setCurrentFamily(currentFamily || null);
       
-      // Always set loading to false at the end
-      if (isMounted.current) {
-        console.log("🟢 Auth process completed successfully");
-        setIsLoading(false);
-      }
+      console.log("🟢 Auth process completed successfully");
       
     } catch (error) {
       console.error('🔴 Error in handleUserProfile:', error);
+    } finally {
       if (isMounted.current) {
-        setUser(null);
-        setFamilies([]);
-        setCurrentFamily(null);
         setIsLoading(false);
       }
     }
