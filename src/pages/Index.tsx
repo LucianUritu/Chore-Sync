@@ -1,11 +1,11 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { getRedirectPath } from "@/utils/familyUtils";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, families } = useAuth();
   const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
@@ -13,22 +13,33 @@ const Index = () => {
     
     console.log("Index: Auth state check", { 
       hasUser: !!user,
-      familiesCount: user?.families?.length || 0,
-      families: user?.families,
+      familiesCount: families?.length || 0,
+      families: families,
       isLoading
     });
     
     // Small timeout to ensure state is stable before navigation
     const redirectTimer = setTimeout(() => {
-      const redirectPath = getRedirectPath(user);
-      
-      console.log("Index: Redirecting to:", redirectPath);
-      setHasRedirected(true);
-      navigate(redirectPath, { replace: true });
-    }, 50); // Reduced timeout for faster redirect
+      if (!user) {
+        // No user - go to login
+        console.log("Index: No user, redirecting to login");
+        setHasRedirected(true);
+        navigate('/login', { replace: true });
+      } else if (!families || families.length === 0) {
+        // User exists but no families - go to family selection
+        console.log("Index: User has no families, redirecting to family selection");
+        setHasRedirected(true);
+        navigate('/family-selection', { replace: true });
+      } else {
+        // User has families - go to home
+        console.log("Index: User has families, redirecting to home");
+        setHasRedirected(true);
+        navigate('/home', { replace: true });
+      }
+    }, 50);
 
     return () => clearTimeout(redirectTimer);
-  }, [navigate, user, isLoading, hasRedirected]);
+  }, [navigate, user, isLoading, families, hasRedirected]);
 
   // Show loading state while checking auth
   return (
@@ -43,7 +54,7 @@ const Index = () => {
         
         {/* Debug info */}
         <div className="mt-4 text-xs text-gray-400">
-          User: {user ? "✓" : "✗"} | Families: {user?.families?.length || 0} | Loading: {isLoading ? "✓" : "✗"}
+          User: {user ? "✓" : "✗"} | Families: {families?.length || 0} | Loading: {isLoading ? "✓" : "✗"}
         </div>
       </div>
     </div>

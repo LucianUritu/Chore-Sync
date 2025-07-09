@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
-import { Plus, Users, Copy } from 'lucide-react';
+import { Plus, Users, Copy, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integration/supabase/clients';
 
@@ -30,6 +30,7 @@ const FamilySelector = () => {
   const [joinCode, setJoinCode] = useState('');
   const [isLoadingJoinCode, setIsLoadingJoinCode] = useState(false);
   const [joinCodeCache, setJoinCodeCache] = useState<Record<string, string>>({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
 
   const handleCreateFamily = async () => {
@@ -85,6 +86,43 @@ const FamilySelector = () => {
     }
   };
 
+  const refreshFamilyData = async () => {
+    if (!currentFamily?.id) return;
+    
+    setIsRefreshing(true);
+    try {
+      // Force refresh the family data from database
+      const { data: familyData, error } = await supabase
+        .from('families')
+        .select('*')
+        .eq('id', currentFamily.id)
+        .single();
+
+      if (error) {
+        console.error('Error refreshing family data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to refresh family data",
+          variant: "destructive",
+        });
+      } else {
+        console.log('Refreshed family data:', familyData);
+        toast({
+          title: "Family data refreshed",
+          description: "Member list has been updated",
+        });
+        
+        // The real-time subscriptions should pick up the changes automatically
+        // But we can trigger a manual refresh if needed
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error refreshing family data:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const copyJoinCode = () => {
     if (joinCode) {
       navigator.clipboard.writeText(joinCode);
@@ -100,7 +138,8 @@ const FamilySelector = () => {
     console.log('FamilySelector - useEffect triggered:', {
       currentFamilyId: currentFamily?.id,
       familiesCount: families.length,
-      currentFamily: currentFamily?.name
+      currentFamily: currentFamily?.name,
+      membersCount: currentFamily?.members?.length || 0
     });
     
     if (currentFamily?.id) {
@@ -117,6 +156,15 @@ const FamilySelector = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Family</h2>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshFamilyData}
+              disabled={isRefreshing || !currentFamily}
+            >
+              <RefreshCw size={16} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -163,7 +211,7 @@ const FamilySelector = () => {
               <SelectContent>
                 {families.map((family) => (
                   <SelectItem key={family.id} value={family.id}>
-                    {family.name} ({family.members.length} members)
+                    {family.name} ({family.members?.length || 0} members)
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -195,16 +243,24 @@ const FamilySelector = () => {
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Family Members</h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-gray-700">
+                  Family Members ({currentFamily.members?.length || 0})
+                </h3>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {currentFamily.members.map((member) => (
-                  <div key={member.userId} className="flex items-center bg-gray-100 rounded-full px-3 py-1">
-                    <div className="w-6 h-6 bg-choresync-blue text-white rounded-full flex items-center justify-center text-xs mr-2">
-                      {member.initials}
+                {currentFamily.members && currentFamily.members.length > 0 ? (
+                  currentFamily.members.map((member) => (
+                    <div key={member.userId} className="flex items-center bg-gray-100 rounded-full px-3 py-1">
+                      <div className="w-6 h-6 bg-choresync-blue text-white rounded-full flex items-center justify-center text-xs mr-2">
+                        {member.initials}
+                      </div>
+                      <span className="text-sm">{member.name}</span>
                     </div>
-                    <span className="text-sm">{member.name}</span>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500">No members found</div>
+                )}
               </div>
             </div>
           </>

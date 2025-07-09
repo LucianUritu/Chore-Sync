@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integration/supabase/clients';
 import { User, Family } from '@/types/auth.types';
 import { useAuthStateHandler } from '@/hooks/auth/useAuthStateHandler';
+import { getFamilyMembers } from '@/services/familyMemberService';
 
 export const useAuthState = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -49,7 +50,7 @@ export const useAuthState = () => {
     console.log('🔵 Setting up real-time profile subscription for user:', user.id);
 
     const profileSubscription = supabase
-      .channel('profile-changes')
+      .channel(`profile-changes-${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -76,20 +77,25 @@ export const useAuthState = () => {
 
             setUser(updatedUser);
 
-            // Reload families if they changed
+            // Reload families using family_members table
             if (updatedUser.families && updatedUser.families.length > 0) {
               const { data: userFamilies } = await supabase
                 .from('families')
-                .select('*')
+                .select('id, name')
                 .in('id', updatedUser.families);
 
               if (userFamilies && isMounted.current) {
-                const refreshedFamilies = userFamilies.map(family => ({
-                  id: family.id,
-                  name: family.name,
-                  members: Array.isArray(family.members) 
-                    ? (family.members as Array<{userId: string; name: string; initials: string}>)
-                    : []
+                const refreshedFamilies = await Promise.all(userFamilies.map(async (family) => {
+                  const members = await getFamilyMembers(family.id);
+                  return {
+                    id: family.id,
+                    name: family.name,
+                    members: members.map(member => ({
+                      userId: member.user_id,
+                      name: member.name,
+                      initials: member.initials
+                    }))
+                  };
                 }));
 
                 const refreshedCurrentFamily = updatedUser.currentFamilyId 
@@ -104,7 +110,7 @@ export const useAuthState = () => {
               setCurrentFamily(null);
             }
           } catch (error) {
-            console.error('🔴 Error processing real-time update:', error);
+            console.error('🔴 Error processing real-time profile update:', error);
           }
         }
       )
@@ -115,6 +121,92 @@ export const useAuthState = () => {
       supabase.removeChannel(profileSubscription);
     };
   }, [user?.id]);
+
+  // Enhanced real-time subscription for family_members table changes
+  useEffect(() => {
+    if (!user?.families || user.families.length === 0 || !isMounted.current) return;
+
+    console.log('🔵 Setting up family_members subscription for families:', user.families);
+
+    const familyMembersSubscription = supabase
+      .channel(`family-members-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'family_members'
+        },
+        async (payload) => {
+          if (!isMounted.current) return;
+          
+          const affectedMember = (payload.new || payload.old) as any;
+          
+          // Only process if this change affects our families
+          if (!affectedMember || !user.families.includes(affectedMember.family_id)) return;
+          
+          console.log('🟢 Family member change detected for our family:', {
+            event: payload.eventType,
+            familyId: affectedMember.family_id,
+            memberName: affectedMember.name || 'unknown'
+          });
+          
+          try {
+            // Refresh all user families when any family member changes
+            const { data: userFamilies, error: familiesError } = await supabase
+              .from('families')
+              .select('id, name')
+              .in('id', user.families);
+
+            if (familiesError) {
+              console.error('🔴 Error fetching families after member change:', familiesError);
+              return;
+            }
+
+            if (userFamilies && isMounted.current) {
+              const refreshedFamilies = await Promise.all(userFamilies.map(async (family) => {
+                console.log('🔄 Refreshing members for family after member change:', family.name);
+                const members = await getFamilyMembers(family.id);
+                console.log('🔄 Found members after change:', members.length, 'for family:', family.name);
+                
+                return {
+                  id: family.id,
+                  name: family.name,
+                  members: members.map(member => ({
+                    userId: member.user_id,
+                    name: member.name,
+                    initials: member.initials
+                  }))
+                };
+              }));
+
+              const refreshedCurrentFamily = user.currentFamilyId 
+                ? refreshedFamilies.find(f => f.id === user.currentFamilyId) || null
+                : null;
+
+              console.log('🟢 Updated families from family_members real-time subscription:', {
+                familiesCount: refreshedFamilies.length,
+                currentFamily: refreshedCurrentFamily?.name,
+                currentFamilyMembers: refreshedCurrentFamily?.members?.length || 0
+              });
+
+              setFamilies(refreshedFamilies);
+              setCurrentFamily(refreshedCurrentFamily);
+            }
+          } catch (error) {
+            console.error('🔴 Error processing family member real-time update:', error);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔵 Family members subscription status:', status);
+      });
+
+    return () => {
+      console.log('🔴 Cleaning up family members subscription');
+      supabase.removeChannel(familyMembersSubscription);
+    };
+  }, [user?.families?.join(','), user?.currentFamilyId, user?.id]); // Use join to create stable dependency
 
   return {
     user,

@@ -1,9 +1,8 @@
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import StatusCard from "@/components/ui/StatusCard";
 import { CalendarIcon, Clock, Check, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { getChoresByFamilyId } from "@/services/database";
 
 interface StatusOverviewProps {
   completedChores: number;
@@ -13,6 +12,15 @@ interface StatusOverviewProps {
 
 const StatusOverview = ({ completedChores, totalChores, shoppingItems }: StatusOverviewProps) => {
   const { currentFamily } = useAuth();
+  
+  // Ensure we're counting all members correctly
+  const memberCount = currentFamily?.members?.length || 0;
+  
+  console.log('StatusOverview - Member count:', {
+    familyName: currentFamily?.name,
+    memberCount,
+    members: currentFamily?.members
+  });
   
   return (
     <div className="grid grid-cols-2 gap-4 mb-6">
@@ -36,7 +44,7 @@ const StatusOverview = ({ completedChores, totalChores, shoppingItems }: StatusO
       />
       <StatusCard 
         title="Family Members" 
-        count={currentFamily?.members.length || 0} 
+        count={memberCount} 
         color="purple" 
         icon={Users} 
       />

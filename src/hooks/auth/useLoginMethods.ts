@@ -74,10 +74,9 @@ export const useLoginMethods = ({
         description: "Welcome back!",
       });
       
-      // Navigate immediately after successful auth
-      // The auth state listener will handle user profile loading
-      console.log("🟢 Navigating to /home");
-      navigate('/home');
+      // Navigate to root - let Index component handle family-based routing
+      console.log("🟢 Navigating to root for family check");
+      navigate('/');
       
       return true;
     } catch (error: any) {

@@ -2,6 +2,7 @@
 import { supabase } from '@/integration/supabase/clients';
 import { useToast } from '@/hooks/use-toast';
 import { User, Family } from '@/types/auth.types';
+import { addMemberToFamily } from '@/services/familyMemberService';
 
 interface FamilyCreationProps {
   user: User | null;
@@ -24,7 +25,55 @@ export const useFamilyCreation = ({ user, refreshUserAndFamilies }: FamilyCreati
       const familyId = crypto.randomUUID();
       const joinCode = generateJoinCode();
       
-      console.log('Creating family with join code:', { familyId, joinCode });
+      console.log('🔵 Creating family:', { name, familyId, joinCode });
+
+      // Save family to database
+      const { error: familyError } = await supabase
+        .from('families')
+        .insert({
+          id: familyId,
+          name,
+          join_code: joinCode
+        });
+
+      if (familyError) {
+        console.error('🔴 Error saving family to database:', familyError);
+        throw familyError;
+      }
+
+      console.log('🟢 Family saved to database successfully');
+
+      // Add creator as first family member
+      await addMemberToFamily(familyId, user.id, user.name, user.initials);
+      console.log('🟢 Added creator as family member');
+
+      // Update user's families and set as current family
+      const updatedUserFamilies = [...(user.families || []), familyId];
+      
+      const { error: userError } = await supabase
+        .from('profiles')
+        .update({
+          families: updatedUserFamilies,
+          current_family_id: familyId
+        })
+        .eq('id', user.id);
+
+      if (userError) {
+        console.error('🔴 Error updating user profile:', userError);
+        throw userError;
+      }
+
+      console.log('🟢 Updated user profile with new family');
+
+      // Refresh all data from database to ensure sync
+      await refreshUserAndFamilies();
+
+      toast({
+        title: "Family created successfully",
+        description: `${name} has been created with join code: ${joinCode}`,
+      });
+
+      console.log('🟢 Family creation completed successfully');
       
       const newFamily: Family = {
         id: familyId,
@@ -35,56 +84,16 @@ export const useFamilyCreation = ({ user, refreshUserAndFamilies }: FamilyCreati
           initials: user.initials
         }]
       };
-
-      // Save family to database
-      const { error: familyError } = await supabase
-        .from('families')
-        .insert({
-          id: familyId,
-          name,
-          members: newFamily.members,
-          join_code: joinCode
-        });
-
-      if (familyError) {
-        console.error('Error saving family to database:', familyError);
-        throw familyError;
-      }
-
-      // Update user's families and current family in database
-      const updatedUserFamilies = [...user.families, familyId];
-      const { error: userError } = await supabase
-        .from('profiles')
-        .update({
-          families: updatedUserFamilies,
-          current_family_id: familyId
-        })
-        .eq('id', user.id);
-
-      if (userError) {
-        console.error('Error updating user profile:', userError);
-        throw userError;
-      }
-
-      // Refresh all data from database to ensure sync
-      await refreshUserAndFamilies();
-
-      toast({
-        title: "Family created successfully",
-        description: `${name} has been created with join code: ${joinCode}`,
-      });
-
-      console.log('Family created successfully with join code:', joinCode);
       
       return newFamily;
     } catch (error: any) {
-      console.error('Error creating family:', error);
+      console.error('🔴 Error creating family:', error);
       toast({
         title: "Error creating family",
         description: error.message || "Failed to create family",
         variant: "destructive",
       });
-      throw new Error(`Failed to create family: ${error.message}`);
+      throw error;
     }
   };
 

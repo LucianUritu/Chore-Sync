@@ -2,6 +2,7 @@
 import { supabase } from '@/integration/supabase/clients';
 import { useToast } from '@/hooks/use-toast';
 import { User, Family } from '@/types/auth.types';
+import { updateMemberInfo } from '@/services/familyMemberService';
 
 interface FamilyActionsProps {
   user: User | null;
@@ -30,14 +31,14 @@ export const useFamilyActions = ({
     try {
       console.log('🔄 Switching to family:', familyId);
       
-      // Update current family in database
+      // Update current family in database first
       const { error } = await supabase
         .from('profiles')
         .update({ current_family_id: familyId })
         .eq('id', user.id);
 
       if (error) {
-        console.error('Error updating current family:', error);
+        console.error('🔴 Error updating current family in database:', error);
         throw error;
       }
 
@@ -45,23 +46,26 @@ export const useFamilyActions = ({
       const selectedFamily = families.find(f => f.id === familyId);
       
       if (selectedFamily) {
-        // Update local state immediately
+        // Update local state immediately for responsive UI
         const updatedUser = { ...user, currentFamilyId: familyId };
         setUser(updatedUser);
         setCurrentFamily(selectedFamily);
         
         console.log('🟢 Family switched successfully to:', selectedFamily.name);
         
-        // Refresh data to ensure sync
-        await refreshUserAndFamilies();
-        
         toast({
           title: "Family switched",
           description: `Switched to ${selectedFamily.name}`,
         });
+
+        // Refresh data to ensure everything is in sync
+        await refreshUserAndFamilies();
+      } else {
+        console.error('🔴 Selected family not found in families list');
+        throw new Error('Selected family not found');
       }
     } catch (error: any) {
-      console.error('Error switching family:', error);
+      console.error('🔴 Error switching family:', error);
       toast({
         title: "Error switching family",
         description: error.message || "Failed to switch family",
@@ -74,9 +78,15 @@ export const useFamilyActions = ({
     if (!user) return;
 
     try {
-      const newInitials = newName.substring(0, 2).toUpperCase();
+      const newInitials = newName
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase())
+        .join('')
+        .substring(0, 2);
       
-      // Update in database
+      console.log('🔄 Updating user name:', { oldName: user.name, newName, newInitials });
+      
+      // Update in profiles table
       const { error: userError } = await supabase
         .from('profiles')
         .update({
@@ -85,30 +95,22 @@ export const useFamilyActions = ({
         })
         .eq('id', user.id);
 
-      if (userError) throw userError;
+      if (userError) {
+        console.error('🔴 Error updating user profile:', userError);
+        throw userError;
+      }
 
-      // Update user in all families they belong to
+      // Update user in all families they belong to using family_members table
       for (const familyId of user.families) {
-        const family = families.find(f => f.id === familyId);
-        if (family) {
-          const updatedMembers = family.members.map(member => 
-            member.userId === user.id 
-              ? { ...member, name: newName, initials: newInitials }
-              : member
-          );
-
-          const { error: familyError } = await supabase
-            .from('families')
-            .update({ members: updatedMembers })
-            .eq('id', familyId);
-
-          if (familyError) {
-            console.error('Error updating family member:', familyError);
-          }
+        try {
+          await updateMemberInfo(familyId, user.id, newName, newInitials);
+          console.log('🟢 Updated member info in family:', familyId);
+        } catch (error) {
+          console.error('🔴 Error updating member info in family:', familyId, error);
         }
       }
 
-      // Refresh all data from database
+      // Refresh all data from database to reflect changes
       await refreshUserAndFamilies();
 
       toast({
@@ -117,7 +119,7 @@ export const useFamilyActions = ({
       });
 
     } catch (error: any) {
-      console.error('Error updating user name:', error);
+      console.error('🔴 Error updating user name:', error);
       toast({
         title: "Error updating profile",
         description: error.message || "Failed to update profile",

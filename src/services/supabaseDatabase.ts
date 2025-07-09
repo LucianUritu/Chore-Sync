@@ -1,6 +1,7 @@
 
 import { supabase } from '@/integration/supabase/clients';
 import { User, Family } from '@/types/auth.types';
+import { getFamilyMembers } from '@/services/familyMemberService';
 
 // Helper function to get initials from name
 export const getInitials = (name: string): string => {
@@ -86,23 +87,34 @@ export const getUserByEmail = async (email: string): Promise<User | null> => {
   }
 };
 
-// Family Operations
+// Family Operations - Updated to use family_members table exclusively
 export const getFamilies = async (): Promise<Family[]> => {
   try {
     const { data, error } = await supabase
       .from('families')
-      .select('*');
+      .select('id, name');
     
     if (error) throw error;
     
-    // Convert Supabase data to Family interface with proper type casting
-    return (data || []).map(family => ({
-      id: family.id,
-      name: family.name,
-      members: Array.isArray(family.members) 
-        ? (family.members as { userId: string; name: string; initials: string; }[])
-        : []
+    // Get members for each family from the family_members table
+    const families = await Promise.all((data || []).map(async (family) => {
+      console.log('🔵 Loading members for family:', family.name, family.id);
+      const members = await getFamilyMembers(family.id);
+      console.log('🔵 Found members:', members.length, 'for family:', family.name);
+      
+      return {
+        id: family.id,
+        name: family.name,
+        members: members.map(member => ({
+          userId: member.user_id,
+          name: member.name,
+          initials: member.initials
+        }))
+      };
     }));
+    
+    console.log('🟢 Successfully loaded all families with members from family_members table');
+    return families;
   } catch (error: any) {
     console.error('Error getting families:', error);
     throw new Error(`Failed to get families: ${error.message}`);
@@ -111,12 +123,12 @@ export const getFamilies = async (): Promise<Family[]> => {
 
 export const saveFamily = async (family: Family): Promise<void> => {
   try {
+    // Only save family basic info, members are handled separately in family_members table
     const { error } = await supabase
       .from('families')
       .upsert({
         id: family.id,
-        name: family.name,
-        members: family.members
+        name: family.name
       });
     
     if (error) throw error;
@@ -128,9 +140,11 @@ export const saveFamily = async (family: Family): Promise<void> => {
 
 export const getFamilyById = async (familyId: string): Promise<Family | null> => {
   try {
+    console.log('🔵 Getting family by ID:', familyId);
+    
     const { data, error } = await supabase
       .from('families')
-      .select('*')
+      .select('id, name')
       .eq('id', familyId)
       .single();
     
@@ -139,13 +153,19 @@ export const getFamilyById = async (familyId: string): Promise<Family | null> =>
       throw error;
     }
     
-    // Convert Supabase data to Family interface with proper type casting
+    // Get members from the family_members table
+    console.log('🔵 Loading members for family:', data.name);
+    const members = await getFamilyMembers(familyId);
+    console.log('🔵 Found members:', members.length, 'for family:', data.name);
+    
     return {
       id: data.id,
       name: data.name,
-      members: Array.isArray(data.members) 
-        ? (data.members as { userId: string; name: string; initials: string; }[])
-        : []
+      members: members.map(member => ({
+        userId: member.user_id,
+        name: member.name,
+        initials: member.initials
+      }))
     };
   } catch (error: any) {
     console.error('Error getting family by ID:', error);

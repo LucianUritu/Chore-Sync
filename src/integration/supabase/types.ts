@@ -69,6 +69,48 @@ export type Database = {
         }
         Relationships: []
       }
+      family_members: {
+        Row: {
+          id: string
+          family_id: string
+          user_id: string
+          name: string
+          initials: string
+          joined_at: string
+        }
+        Insert: {
+          id?: string
+          family_id: string
+          user_id: string
+          name: string
+          initials: string
+          joined_at?: string
+        }
+        Update: {
+          id?: string
+          family_id?: string
+          user_id?: string
+          name?: string
+          initials?: string
+          joined_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "family_members_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "family_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           family_id: string

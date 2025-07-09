@@ -10,21 +10,26 @@ import { useQuery } from "@tanstack/react-query";
 const Home = () => {
   const { user, currentFamily } = useAuth();
 
-  // Query for chores
+  // Query for chores with more aggressive refetching
   const { data: chores = [], isLoading: choreLoading } = useQuery({
     queryKey: ['chores', currentFamily?.id],
     queryFn: () => currentFamily ? getChoresByFamilyId(currentFamily.id) : [],
     enabled: !!currentFamily,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    refetchInterval: 1000 * 30, // Refetch every 30 seconds for live updates
+    staleTime: 1000 * 30, // 30 seconds
+    refetchInterval: 1000 * 15, // Refetch every 15 seconds for live updates
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
-  // Query for shopping items
+  // Query for shopping items with more aggressive refetching
   const { data: shoppingItems = [], isLoading: shoppingLoading } = useQuery({
     queryKey: ['shopping-items', currentFamily?.id],
     queryFn: () => currentFamily ? getShoppingItemsByFamilyId(currentFamily.id) : [],
     enabled: !!currentFamily,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 30, // 30 seconds
+    refetchInterval: 1000 * 15, // Refetch every 15 seconds
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   const isLoading = choreLoading || shoppingLoading;
@@ -68,6 +73,13 @@ const Home = () => {
         initials: assignedMember?.initials || "??"
       }
     };
+  });
+
+  console.log("Home: Rendering with data", {
+    currentFamily: currentFamily?.name,
+    membersCount: currentFamily?.members?.length,
+    choresCount: chores.length,
+    todaysChoresCount: todaysChores.length
   });
 
   return (

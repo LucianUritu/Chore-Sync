@@ -88,6 +88,13 @@ const AddChoreForm = ({ onComplete }: AddChoreFormProps) => {
     return <div>No family selected</div>;
   }
   
+  // Debug log for members
+  console.log('AddChoreForm - Family members:', {
+    familyName: currentFamily.name,
+    membersCount: currentFamily.members?.length || 0,
+    members: currentFamily.members
+  });
+  
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -118,16 +125,22 @@ const AddChoreForm = ({ onComplete }: AddChoreFormProps) => {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {currentFamily.members.map((member) => (
-                    <SelectItem key={member.userId} value={member.userId}>
-                      <div className="flex items-center">
-                        <div className="h-6 w-6 rounded-full bg-choresync-blue text-white flex items-center justify-center text-xs mr-2">
-                          {member.initials}
+                  {currentFamily.members && currentFamily.members.length > 0 ? (
+                    currentFamily.members.map((member) => (
+                      <SelectItem key={member.userId} value={member.userId}>
+                        <div className="flex items-center">
+                          <div className="h-6 w-6 rounded-full bg-choresync-blue text-white flex items-center justify-center text-xs mr-2">
+                            {member.initials}
+                          </div>
+                          {member.name}
                         </div>
-                        {member.name}
-                      </div>
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-members" disabled>
+                      No family members found
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
               <FormMessage />
