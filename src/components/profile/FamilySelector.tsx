@@ -29,37 +29,57 @@ const FamilySelector = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [isLoadingJoinCode, setIsLoadingJoinCode] = useState(false);
+  const [joinCodeCache, setJoinCodeCache] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   const handleCreateFamily = async () => {
     if (newFamilyName.trim()) {
-      await createFamily(newFamilyName);
-      setNewFamilyName('');
-      setIsDialogOpen(false);
+      try {
+        console.log('Creating family:', newFamilyName);
+        await createFamily(newFamilyName);
+        
+        setNewFamilyName('');
+        setIsDialogOpen(false);
+        
+        // Note: join code will be loaded automatically via useEffect when currentFamily changes
+      } catch (error) {
+        console.error('Error creating family:', error);
+      }
     }
   };
 
-  const loadJoinCode = async () => {
-    if (!currentFamily) return;
-    
+  const loadJoinCodeForFamily = async (familyId: string) => {
+    // Check cache first
+    if (joinCodeCache[familyId]) {
+      setJoinCode(joinCodeCache[familyId]);
+      return;
+    }
+
     setIsLoadingJoinCode(true);
     try {
+      console.log('Loading join code for family:', familyId);
       const { data: family, error } = await supabase
         .from('families')
         .select('join_code')
-        .eq('id', currentFamily.id)
+        .eq('id', familyId)
         .single();
 
-      if (error) throw error;
-      
-      setJoinCode(family.join_code || '');
+      if (error) {
+        console.error('Error loading join code:', error);
+        setJoinCode('');
+      } else {
+        const code = family?.join_code || '';
+        setJoinCode(code);
+        // Cache the join code
+        setJoinCodeCache(prev => ({
+          ...prev,
+          [familyId]: code
+        }));
+        console.log('Join code loaded and cached:', code);
+      }
     } catch (error) {
       console.error('Error loading join code:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load join code.",
-        variant: "destructive",
-      });
+      setJoinCode('');
     } finally {
       setIsLoadingJoinCode(false);
     }
@@ -75,11 +95,21 @@ const FamilySelector = () => {
     }
   };
 
+  // Load join code when current family changes
   useEffect(() => {
-    if (currentFamily) {
-      loadJoinCode();
+    console.log('FamilySelector - useEffect triggered:', {
+      currentFamilyId: currentFamily?.id,
+      familiesCount: families.length,
+      currentFamily: currentFamily?.name
+    });
+    
+    if (currentFamily?.id) {
+      console.log('Current family changed, loading join code for:', currentFamily.id);
+      loadJoinCodeForFamily(currentFamily.id);
+    } else {
+      setJoinCode('');
     }
-  }, [currentFamily]);
+  }, [currentFamily?.id, families.length]); // Also depend on families.length to trigger when families update
 
   return (
     <div className="bg-white rounded-lg shadow p-6 mb-6">

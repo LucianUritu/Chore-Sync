@@ -30,9 +30,9 @@ export const useAuthStateHandler = ({
     console.log("🔵 Auth state change:", event, session?.user?.id);
     
     try {
-      if (event === 'SIGNED_IN') {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session?.user) {
-          console.log("🟢 User signed in, processing profile...");
+          console.log("🟢 User authenticated, processing profile...");
           await handleUserProfile(session.user, isMounted);
         }
       } else if (event === 'SIGNED_OUT') {
@@ -44,7 +44,6 @@ export const useAuthStateHandler = ({
           setIsLoading(false);
         }
       }
-      // Skip TOKEN_REFRESHED to prevent duplicate processing
     } catch (error) {
       console.error('🔴 Error in auth state change:', error);
       if (isMounted.current) {
@@ -60,68 +59,87 @@ export const useAuthStateHandler = ({
     if (!isMounted.current) return;
     
     try {
-      console.log("🔵 Starting user profile creation/loading for:", authUser.id);
+      console.log("🔵 Loading user profile from database for:", authUser.id);
       
-      const userProfile = await createOrLoadUserProfile(authUser);
-      
-      if (!isMounted.current) {
-        console.log("🔴 Component unmounted during profile loading");
-        return;
+      // Always fetch fresh user profile from database
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.error('🔴 Error fetching profile:', profileError);
+        throw profileError;
       }
 
-      if (!userProfile) {
-        console.error("🔴 Failed to create or load user profile");
-        if (isMounted.current) {
-          setUser(null);
-          setFamilies([]);
-          setCurrentFamily(null);
-          setIsLoading(false);
+      let userProfile: User;
+
+      if (profileData) {
+        userProfile = {
+          id: profileData.id,
+          email: profileData.email,
+          name: profileData.name,
+          initials: profileData.initials,
+          families: Array.isArray(profileData.families) ? profileData.families : [],
+          currentFamilyId: profileData.current_family_id
+        };
+        console.log("🟢 User profile loaded from database:", {
+          id: userProfile.id,
+          name: userProfile.name,
+          familiesCount: userProfile.families?.length || 0,
+          currentFamilyId: userProfile.currentFamilyId
+        });
+      } else {
+        // Create new profile if doesn't exist
+        const userName = authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User';
+        const newUserData = {
+          id: authUser.id,
+          email: authUser.email || '',
+          name: userName,
+          initials: userName.substring(0, 2).toUpperCase(),
+          families: [],
+          current_family_id: null
+        };
+
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert(newUserData);
+
+        if (insertError) {
+          console.error('🔴 Error creating profile:', insertError);
         }
-        return;
-      }
 
-      console.log("🟢 User profile loaded successfully:", {
-        id: userProfile.id,
-        name: userProfile.name,
-        familiesCount: userProfile.families?.length || 0
-      });
+        userProfile = {
+          id: newUserData.id,
+          email: newUserData.email,
+          name: newUserData.name,
+          initials: newUserData.initials,
+          families: newUserData.families,
+          currentFamilyId: newUserData.current_family_id
+        };
+      }
       
       if (!isMounted.current) return;
       setUser(userProfile);
 
-      // Load families with timeout to prevent hanging
-      console.log("🔵 Loading families for user...");
+      // Load families from database
+      console.log("🔵 Loading families from database...");
+      const { families, currentFamily } = await loadUserFamilies(userProfile);
       
-      try {
-        const familyPromise = loadUserFamilies(userProfile);
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Family loading timeout')), 5000);
-        });
-        
-        const { families, currentFamily } = await Promise.race([familyPromise, timeoutPromise]) as any;
-        
-        if (!isMounted.current) return;
-        
-        console.log("🟢 Families loaded:", { 
-          familiesCount: families.length, 
-          currentFamily: currentFamily?.name || 'none'
-        });
-        
-        setFamilies(families || []);
-        setCurrentFamily(currentFamily || null);
-        
-      } catch (familyError) {
-        console.error('🔴 Error loading families (using fallback):', familyError);
-        if (isMounted.current) {
-          // Set empty families but still complete the auth process
-          setFamilies([]);
-          setCurrentFamily(null);
-        }
-      }
+      if (!isMounted.current) return;
+      
+      console.log("🟢 Families loaded from database:", { 
+        familiesCount: families.length, 
+        currentFamily: currentFamily?.name || 'none'
+      });
+      
+      setFamilies(families || []);
+      setCurrentFamily(currentFamily || null);
       
       // Always set loading to false at the end
       if (isMounted.current) {
-        console.log("🟢 Auth process completed, setting loading to false");
+        console.log("🟢 Auth process completed successfully");
         setIsLoading(false);
       }
       
@@ -142,12 +160,7 @@ export const useAuthStateHandler = ({
     console.log("🔵 Checking current session...");
     
     try {
-      const sessionPromise = supabase.auth.getSession();
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Session check timeout')), 3000);
-      });
-      
-      const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+      const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error) {
         console.error("🔴 Error getting session:", error);
