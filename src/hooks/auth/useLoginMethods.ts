@@ -69,46 +69,15 @@ export const useLoginMethods = ({
       
       console.log("🟢 Supabase login successful, user ID:", data.user.id);
       
-      // Create user profile from auth data
-      const userName = data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User';
-      const userProfile: User = {
-        id: data.user.id,
-        email: data.user.email || email,
-        name: userName,
-        initials: userName.substring(0, 2).toUpperCase(),
-        families: [],
-        currentFamilyId: null
-      };
-      
-      // Create default family
-      const defaultFamily: Family = {
-        id: crypto.randomUUID(),
-        name: `${userName}'s Family`,
-        members: [{
-          userId: data.user.id,
-          name: userName,
-          initials: userName.substring(0, 2).toUpperCase()
-        }]
-      };
-      
-      // Update user with family
-      userProfile.families = [defaultFamily.id];
-      userProfile.currentFamilyId = defaultFamily.id;
-      
-      console.log("🟢 Setting user state and navigating to home");
-      
-      // Set states
-      setUser(userProfile);
-      setFamilies([defaultFamily]);
-      setCurrentFamily(defaultFamily);
-      
-      // Navigate to home
-      navigate("/home", { replace: true });
-      
       toast({
         title: "Login successful",
         description: "Welcome back!",
       });
+      
+      // Navigate immediately after successful auth
+      // The auth state listener will handle user profile loading
+      console.log("🟢 Navigating to /home");
+      navigate('/home');
       
       return true;
     } catch (error: any) {

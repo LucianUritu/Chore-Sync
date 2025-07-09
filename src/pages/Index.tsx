@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,7 +25,7 @@ const Index = () => {
       console.log("Index: Redirecting to:", redirectPath);
       setHasRedirected(true);
       navigate(redirectPath, { replace: true });
-    }, 100);
+    }, 50); // Reduced timeout for faster redirect
 
     return () => clearTimeout(redirectTimer);
   }, [navigate, user, isLoading, hasRedirected]);

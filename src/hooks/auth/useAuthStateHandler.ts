@@ -30,10 +30,9 @@ export const useAuthStateHandler = ({
     console.log("🔵 Auth state change:", event, session?.user?.id);
     
     try {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_IN') {
         if (session?.user) {
           console.log("🟢 User signed in, processing profile...");
-          setIsLoading(true);
           await handleUserProfile(session.user, isMounted);
         }
       } else if (event === 'SIGNED_OUT') {
@@ -45,6 +44,7 @@ export const useAuthStateHandler = ({
           setIsLoading(false);
         }
       }
+      // Skip TOKEN_REFRESHED to prevent duplicate processing
     } catch (error) {
       console.error('🔴 Error in auth state change:', error);
       if (isMounted.current) {
@@ -71,44 +71,58 @@ export const useAuthStateHandler = ({
 
       if (!userProfile) {
         console.error("🔴 Failed to create or load user profile");
-        setUser(null);
-        setFamilies([]);
-        setCurrentFamily(null);
-        setIsLoading(false);
+        if (isMounted.current) {
+          setUser(null);
+          setFamilies([]);
+          setCurrentFamily(null);
+          setIsLoading(false);
+        }
         return;
       }
 
-      console.log("🟢 User profile loaded successfully:", userProfile);
+      console.log("🟢 User profile loaded successfully:", {
+        id: userProfile.id,
+        name: userProfile.name,
+        familiesCount: userProfile.families?.length || 0
+      });
+      
+      if (!isMounted.current) return;
       setUser(userProfile);
 
-      // Load families - this is where the issue might be
-      console.log("🔵 Loading families for user...", userProfile.families);
+      // Load families with timeout to prevent hanging
+      console.log("🔵 Loading families for user...");
       
       try {
-        const { families, currentFamily } = await loadUserFamilies(userProfile);
+        const familyPromise = loadUserFamilies(userProfile);
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Family loading timeout')), 5000);
+        });
+        
+        const { families, currentFamily } = await Promise.race([familyPromise, timeoutPromise]) as any;
         
         if (!isMounted.current) return;
         
         console.log("🟢 Families loaded:", { 
           familiesCount: families.length, 
-          currentFamily: currentFamily?.name || 'none',
-          familiesList: families
+          currentFamily: currentFamily?.name || 'none'
         });
         
-        setFamilies(families);
-        setCurrentFamily(currentFamily);
-        
-        // Important: Always set loading to false regardless of family count
-        setIsLoading(false);
+        setFamilies(families || []);
+        setCurrentFamily(currentFamily || null);
         
       } catch (familyError) {
-        console.error('🔴 Error loading families:', familyError);
+        console.error('🔴 Error loading families (using fallback):', familyError);
         if (isMounted.current) {
           // Set empty families but still complete the auth process
           setFamilies([]);
           setCurrentFamily(null);
-          setIsLoading(false);
         }
+      }
+      
+      // Always set loading to false at the end
+      if (isMounted.current) {
+        console.log("🟢 Auth process completed, setting loading to false");
+        setIsLoading(false);
       }
       
     } catch (error) {
@@ -126,10 +140,14 @@ export const useAuthStateHandler = ({
     if (!isMounted.current) return;
     
     console.log("🔵 Checking current session...");
-    setIsLoading(true);
     
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Session check timeout')), 3000);
+      });
+      
+      const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any;
       
       if (error) {
         console.error("🔴 Error getting session:", error);
