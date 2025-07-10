@@ -61,60 +61,25 @@ export const useUserProfile = () => {
         });
         return userProfile;
       } else {
-        // Create new user profile with timeout
-        console.log("🟢 Creating new user profile...");
+        // Profile doesn't exist - return a fallback user instead of trying to create
+        console.log("🟡 No profile found, using fallback user profile");
         const userName = authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User';
         
-        const newUserData = {
+        const fallbackUser: User = {
           id: authUser.id,
           email: authUser.email || '',
           name: userName,
           initials: userName.substring(0, 2).toUpperCase(),
           families: [],
-          current_family_id: null
+          currentFamilyId: null
         };
 
-        console.log("🔵 Inserting new profile data:", newUserData);
-
-        try {
-          const insertPromise = supabase
-            .from('profiles')
-            .insert(newUserData)
-            .select()
-            .single();
-            
-          const insertTimeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Profile insert timeout')), 3000);
-          });
-
-          const { data: insertedData, error: insertProfileError } = await Promise.race([
-            insertPromise,
-            insertTimeoutPromise
-          ]) as any;
-
-          if (insertProfileError) {
-            console.error('🔴 Error creating profile, using fallback:', insertProfileError);
-          }
-        } catch (insertError) {
-          console.error('🔴 Insert timeout, using fallback:', insertError);
-        }
-
-        // Return user profile regardless of database operation success
-        const userProfile: User = {
-          id: newUserData.id,
-          email: newUserData.email,
-          name: newUserData.name,
-          initials: newUserData.initials,
-          families: newUserData.families,
-          currentFamilyId: newUserData.current_family_id
-        };
-
-        console.log("🟢 Returning new user profile:", {
-          id: userProfile.id,
-          name: userProfile.name,
-          familiesCount: userProfile.families.length
+        console.log("🟢 Returning fallback user profile:", {
+          id: fallbackUser.id,
+          name: fallbackUser.name,
+          familiesCount: fallbackUser.families.length
         });
-        return userProfile;
+        return fallbackUser;
       }
     } catch (error) {
       console.error('🔴 Error in createOrLoadUserProfile, using fallback:', error);

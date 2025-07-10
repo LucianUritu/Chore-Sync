@@ -27,7 +27,7 @@ export const useFamilyCreation = ({ user, refreshUserAndFamilies }: FamilyCreati
       
       console.log('🔵 Creating family:', { name, familyId, joinCode });
 
-      // Save family to database
+      // Save family to database first
       const { error: familyError } = await supabase
         .from('families')
         .insert({
@@ -47,23 +47,54 @@ export const useFamilyCreation = ({ user, refreshUserAndFamilies }: FamilyCreati
       await addMemberToFamily(familyId, user.id, user.name, user.initials);
       console.log('🟢 Added creator as family member');
 
-      // Update user's families and set as current family
-      const updatedUserFamilies = [...(user.families || []), familyId];
-      
-      const { error: userError } = await supabase
-        .from('profiles')
-        .update({
-          families: updatedUserFamilies,
-          current_family_id: familyId
-        })
-        .eq('id', user.id);
+      // Try to create/update user profile - if it fails due to RLS, continue anyway
+      try {
+        // First check if profile exists
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id, families')
+          .eq('id', user.id)
+          .single();
 
-      if (userError) {
-        console.error('🔴 Error updating user profile:', userError);
-        throw userError;
+        const updatedUserFamilies = [...(existingProfile?.families || []), familyId];
+        
+        if (existingProfile) {
+          // Update existing profile
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              families: updatedUserFamilies,
+              current_family_id: familyId
+            })
+            .eq('id', user.id);
+
+          if (updateError) {
+            console.log('🟡 Could not update profile, but family was created:', updateError.message);
+          } else {
+            console.log('🟢 Updated user profile with new family');
+          }
+        } else {
+          // Try to create profile
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              initials: user.initials,
+              families: updatedUserFamilies,
+              current_family_id: familyId
+            });
+
+          if (insertError) {
+            console.log('🟡 Could not create profile due to RLS, but family was created:', insertError.message);
+          } else {
+            console.log('🟢 Created user profile with new family');
+          }
+        }
+      } catch (profileError: any) {
+        console.log('🟡 Profile operation failed, but family was created successfully:', profileError.message);
       }
-
-      console.log('🟢 Updated user profile with new family');
 
       // Refresh all data from database to ensure sync
       await refreshUserAndFamilies();

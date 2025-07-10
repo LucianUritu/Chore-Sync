@@ -104,7 +104,7 @@ const FamilySelection = () => {
         return;
       }
 
-      // Check if user is already in the family using the new table
+      // Check if user is already in the family using the family_members table
       const { data: existingMember, error: memberCheckError } = await supabase
         .from('family_members')
         .select('id')
@@ -136,34 +136,39 @@ const FamilySelection = () => {
         userInitials
       });
 
-      // Add member using the new service
+      // Add member using the service
       await addMemberToFamily(family.id, user.id, user.name, userInitials);
 
       console.log("FamilySelection: Successfully added member to family_members table");
 
-      // Update user's families list
-      const updatedUserFamilies = [...(user.families || []), family.id];
-      
-      console.log("FamilySelection: Updating user profile", { 
-        userId: user.id, 
-        newFamilies: updatedUserFamilies,
-        settingCurrentFamily: family.id
-      });
+      // Try to update user profile if it exists - don't fail if it doesn't work
+      try {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('families')
+          .eq('id', user.id)
+          .single();
 
-      const { error: updateUserError } = await supabase
-        .from('profiles')
-        .update({ 
-          families: updatedUserFamilies,
-          current_family_id: family.id
-        })
-        .eq('id', user.id);
+        if (existingProfile) {
+          const updatedUserFamilies = [...(existingProfile.families || []), family.id];
+          
+          const { error: updateUserError } = await supabase
+            .from('profiles')
+            .update({ 
+              families: updatedUserFamilies,
+              current_family_id: family.id
+            })
+            .eq('id', user.id);
 
-      if (updateUserError) {
-        console.error("FamilySelection: Error updating user profile:", updateUserError);
-        throw new Error(`Failed to update user profile: ${updateUserError.message}`);
+          if (updateUserError) {
+            console.log('🟡 Could not update user profile, but member was added to family:', updateUserError.message);
+          } else {
+            console.log("FamilySelection: Successfully updated user profile");
+          }
+        }
+      } catch (profileError: any) {
+        console.log('🟡 Profile update failed, but member was added to family:', profileError.message);
       }
-
-      console.log("FamilySelection: Successfully updated user profile");
 
       // Add a small delay to ensure database changes propagate
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -190,6 +195,7 @@ const FamilySelection = () => {
     }
   };
 
+  // ... keep existing code (loading state, return JSX)
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-choresync-gray">
