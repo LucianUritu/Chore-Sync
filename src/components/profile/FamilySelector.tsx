@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Plus, Users, Copy, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integration/supabase/clients';
+import { getFamilyMembers } from '@/services/familyMemberService';
 
 const FamilySelector = () => {
   const { families, currentFamily, switchFamily, createFamily } = useAuth();
@@ -31,6 +32,7 @@ const FamilySelector = () => {
   const [isLoadingJoinCode, setIsLoadingJoinCode] = useState(false);
   const [joinCodeCache, setJoinCodeCache] = useState<Record<string, string>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [liveMemberCount, setLiveMemberCount] = useState(0);
   const { toast } = useToast();
 
   const handleCreateFamily = async () => {
@@ -41,8 +43,6 @@ const FamilySelector = () => {
         
         setNewFamilyName('');
         setIsDialogOpen(false);
-        
-        // Note: join code will be loaded automatically via useEffect when currentFamily changes
       } catch (error) {
         console.error('Error creating family:', error);
       }
@@ -86,38 +86,36 @@ const FamilySelector = () => {
     }
   };
 
+  const loadLiveMemberCount = async (familyId: string) => {
+    try {
+      console.log('🔄 Loading live member count for family:', familyId);
+      const members = await getFamilyMembers(familyId);
+      const count = members.length;
+      setLiveMemberCount(count);
+      console.log('🟢 Live member count updated:', count);
+    } catch (error) {
+      console.error('🔴 Error loading live member count:', error);
+      setLiveMemberCount(0);
+    }
+  };
+
   const refreshFamilyData = async () => {
     if (!currentFamily?.id) return;
     
     setIsRefreshing(true);
     try {
-      // Force refresh the family data from database
-      const { data: familyData, error } = await supabase
-        .from('families')
-        .select('*')
-        .eq('id', currentFamily.id)
-        .single();
-
-      if (error) {
-        console.error('Error refreshing family data:', error);
-        toast({
-          title: "Error",
-          description: "Failed to refresh family data",
-          variant: "destructive",
-        });
-      } else {
-        console.log('Refreshed family data:', familyData);
-        toast({
-          title: "Family data refreshed",
-          description: "Member list has been updated",
-        });
-        
-        // The real-time subscriptions should pick up the changes automatically
-        // But we can trigger a manual refresh if needed
-        window.location.reload();
-      }
+      await loadLiveMemberCount(currentFamily.id);
+      toast({
+        title: "Family data refreshed",
+        description: "Member count has been updated",
+      });
     } catch (error) {
       console.error('Error refreshing family data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh family data",
+        variant: "destructive",
+      });
     } finally {
       setIsRefreshing(false);
     }
@@ -133,22 +131,61 @@ const FamilySelector = () => {
     }
   };
 
-  // Load join code when current family changes
+  // Load join code and member count when current family changes
   useEffect(() => {
     console.log('FamilySelector - useEffect triggered:', {
       currentFamilyId: currentFamily?.id,
       familiesCount: families.length,
       currentFamily: currentFamily?.name,
-      membersCount: currentFamily?.members?.length || 0
+      staticMembersCount: currentFamily?.members?.length || 0
     });
     
     if (currentFamily?.id) {
-      console.log('Current family changed, loading join code for:', currentFamily.id);
+      console.log('Current family changed, loading data for:', currentFamily.id);
       loadJoinCodeForFamily(currentFamily.id);
+      loadLiveMemberCount(currentFamily.id);
     } else {
       setJoinCode('');
+      setLiveMemberCount(0);
     }
-  }, [currentFamily?.id, families.length]); // Also depend on families.length to trigger when families update
+  }, [currentFamily?.id, families.length]);
+
+  // Set up real-time subscription for family member changes
+  useEffect(() => {
+    if (!currentFamily?.id) return;
+
+    console.log('🔵 Setting up real-time member count subscription for family:', currentFamily.id);
+
+    const memberSubscription = supabase
+      .channel(`family-members-live-${currentFamily.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'family_members',
+          filter: `family_id=eq.${currentFamily.id}`
+        },
+        async (payload) => {
+          console.log('🟢 Real-time family member change detected:', {
+            event: payload.eventType,
+            familyId: currentFamily.id,
+            memberData: payload.new || payload.old
+          });
+          
+          // Reload the live member count
+          await loadLiveMemberCount(currentFamily.id);
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔵 Member count subscription status:', status);
+      });
+
+    return () => {
+      console.log('🔴 Cleaning up member count subscription');
+      supabase.removeChannel(memberSubscription);
+    };
+  }, [currentFamily?.id]);
 
   return (
     <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -245,7 +282,7 @@ const FamilySelector = () => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-gray-700">
-                  Family Members ({currentFamily.members?.length || 0})
+                  Family Members ({liveMemberCount})
                 </h3>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -259,7 +296,9 @@ const FamilySelector = () => {
                     </div>
                   ))
                 ) : (
-                  <div className="text-sm text-gray-500">No members found</div>
+                  <div className="text-sm text-gray-500">
+                    {liveMemberCount > 0 ? `Loading ${liveMemberCount} members...` : 'No members found'}
+                  </div>
                 )}
               </div>
             </div>

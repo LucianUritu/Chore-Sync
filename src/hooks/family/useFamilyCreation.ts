@@ -43,57 +43,26 @@ export const useFamilyCreation = ({ user, refreshUserAndFamilies }: FamilyCreati
 
       console.log('🟢 Family saved to database successfully');
 
-      // Add creator as first family member
+      // Add creator as first family member (this is now the primary source of truth)
       await addMemberToFamily(familyId, user.id, user.name, user.initials);
       console.log('🟢 Added creator as family member');
 
-      // Try to create/update user profile - if it fails due to RLS, continue anyway
+      // Try to update user profile preference but don't fail if RLS blocks it
       try {
-        // First check if profile exists
-        const { data: existingProfile } = await supabase
+        const { error: updateError } = await supabase
           .from('profiles')
-          .select('id, families')
-          .eq('id', user.id)
-          .single();
+          .update({
+            current_family_id: familyId
+          })
+          .eq('id', user.id);
 
-        const updatedUserFamilies = [...(existingProfile?.families || []), familyId];
-        
-        if (existingProfile) {
-          // Update existing profile
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({
-              families: updatedUserFamilies,
-              current_family_id: familyId
-            })
-            .eq('id', user.id);
-
-          if (updateError) {
-            console.log('🟡 Could not update profile, but family was created:', updateError.message);
-          } else {
-            console.log('🟢 Updated user profile with new family');
-          }
+        if (updateError) {
+          console.log('🟡 Could not update profile preference (RLS), but family was created:', updateError.message);
         } else {
-          // Try to create profile
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: user.id,
-              email: user.email,
-              name: user.name,
-              initials: user.initials,
-              families: updatedUserFamilies,
-              current_family_id: familyId
-            });
-
-          if (insertError) {
-            console.log('🟡 Could not create profile due to RLS, but family was created:', insertError.message);
-          } else {
-            console.log('🟢 Created user profile with new family');
-          }
+          console.log('🟢 Updated user profile with new family preference');
         }
       } catch (profileError: any) {
-        console.log('🟡 Profile operation failed, but family was created successfully:', profileError.message);
+        console.log('🟡 Profile preference update failed, but family was created successfully:', profileError.message);
       }
 
       // Refresh all data from database to ensure sync

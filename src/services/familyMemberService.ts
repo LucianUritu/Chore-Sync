@@ -11,20 +11,23 @@ export interface FamilyMember {
 }
 
 export const addMemberToFamily = async (familyId: string, userId: string, name: string, initials: string): Promise<void> => {
-  console.log('Adding member to family:', { familyId, userId, name, initials });
+  console.log('🔵 Adding member to family:', { familyId, userId, name, initials });
   
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('family_members')
       .insert({
         family_id: familyId,
         user_id: userId,
         name,
         initials
-      });
+      })
+      .select();
+
+    console.log('🔵 Insert result:', { data, error });
 
     if (error) {
-      console.error('Detailed error adding member to family:', {
+      console.error('🔴 Detailed error adding member to family:', {
         message: error.message,
         details: error.details,
         hint: error.hint,
@@ -34,22 +37,26 @@ export const addMemberToFamily = async (familyId: string, userId: string, name: 
       throw new Error(`Failed to add member to family: ${error.message || 'Unknown database error'}`);
     }
     
-    console.log('Successfully added member to family');
+    console.log('🟢 Successfully added member to family:', data);
   } catch (err: any) {
-    console.error('Catch block error:', err);
+    console.error('🔴 Catch block error:', err);
     throw err;
   }
 };
 
 export const getFamilyMembers = async (familyId: string): Promise<FamilyMember[]> => {
+  console.log('🔵 Getting family members for familyId:', familyId);
+  
   try {
     const { data, error } = await supabase
       .from('family_members')
       .select('*')
       .eq('family_id', familyId);
 
+    console.log('🔵 Query result:', { data, error, familyId });
+
     if (error) {
-      console.error('Error getting family members:', {
+      console.error('🔴 Error getting family members:', {
         message: error.message,
         details: error.details,
         hint: error.hint,
@@ -58,9 +65,10 @@ export const getFamilyMembers = async (familyId: string): Promise<FamilyMember[]
       throw new Error(`Failed to get family members: ${error.message || 'Unknown database error'}`);
     }
 
+    console.log('🟢 Successfully got family members:', data?.length || 0, 'members');
     return data || [];
   } catch (err: any) {
-    console.error('Catch block error in getFamilyMembers:', err);
+    console.error('🔴 Catch block error in getFamilyMembers:', err);
     return [];
   }
 };

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,7 +23,7 @@ const FamilySelection = () => {
   useEffect(() => {
     if (!isLoading && families && families.length > 0) {
       console.log("FamilySelection: User already has families, redirecting to home");
-      navigate("/", { replace: true });
+      navigate("/home", { replace: true });
     }
   }, [isLoading, families, navigate]);
 
@@ -58,8 +57,8 @@ const FamilySelection = () => {
       });
       
       if (newFamily) {
-        console.log("FamilySelection: Family created successfully, navigating to root");
-        navigate("/", { replace: true });
+        console.log("FamilySelection: Family created successfully, navigating to home");
+        navigate("/home", { replace: true });
       }
     } catch (error: any) {
       console.error("FamilySelection: Error creating family", error);
@@ -136,52 +135,41 @@ const FamilySelection = () => {
         userInitials
       });
 
-      // Add member using the service
+      // Add member using the service (family_members table is now the source of truth)
       await addMemberToFamily(family.id, user.id, user.name, userInitials);
 
       console.log("FamilySelection: Successfully added member to family_members table");
 
-      // Try to update user profile if it exists - don't fail if it doesn't work
+      // Try to update user profile preference - but don't fail if RLS blocks it
       try {
-        const { data: existingProfile } = await supabase
+        const { error: updateUserError } = await supabase
           .from('profiles')
-          .select('families')
-          .eq('id', user.id)
-          .single();
+          .update({ 
+            current_family_id: family.id
+          })
+          .eq('id', user.id);
 
-        if (existingProfile) {
-          const updatedUserFamilies = [...(existingProfile.families || []), family.id];
-          
-          const { error: updateUserError } = await supabase
-            .from('profiles')
-            .update({ 
-              families: updatedUserFamilies,
-              current_family_id: family.id
-            })
-            .eq('id', user.id);
-
-          if (updateUserError) {
-            console.log('🟡 Could not update user profile, but member was added to family:', updateUserError.message);
-          } else {
-            console.log("FamilySelection: Successfully updated user profile");
-          }
+        if (updateUserError) {
+          console.log('🟡 Could not update user profile preference (RLS), but member was added to family:', updateUserError.message);
+        } else {
+          console.log("FamilySelection: Successfully updated user profile preference");
         }
       } catch (profileError: any) {
-        console.log('🟡 Profile update failed, but member was added to family:', profileError.message);
+        console.log('🟡 Profile preference update failed, but member was added to family:', profileError.message);
       }
-
-      // Add a small delay to ensure database changes propagate
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
       toast({
         title: "Successfully joined family!",
-        description: `Welcome to ${family.name}. Redirecting...`,
+        description: `Welcome to ${family.name}. Redirecting to home...`,
       });
 
       console.log("FamilySelection: Family join complete, navigating to home");
       
-      // Navigate to home - real-time subscriptions should pick up the changes
-      navigate("/", { replace: true });
+      // Add a longer delay to ensure database changes propagate and auth state updates
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Navigate directly to home page
+      navigate("/home", { replace: true });
 
     } catch (error: any) {
       console.error("FamilySelection: Error joining family", error);
@@ -195,7 +183,6 @@ const FamilySelection = () => {
     }
   };
 
-  // ... keep existing code (loading state, return JSX)
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-choresync-gray">

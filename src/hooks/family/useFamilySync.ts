@@ -23,40 +23,42 @@ export const useFamilySync = ({
     try {
       console.log('🔄 Refreshing user and families for:', user.id);
       
-      // Refresh user profile from database
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      // Get user's families directly from family_members table
+      const { data: userMemberships, error: membershipsError } = await supabase
+        .from('family_members')
+        .select('family_id')
+        .eq('user_id', user.id);
 
-      if (profileError) {
-        console.error('🔴 Error fetching user profile:', profileError);
-        throw profileError;
+      if (membershipsError) {
+        console.error('🔴 Error fetching user memberships:', membershipsError);
+        throw membershipsError;
       }
 
-      const updatedUser: User = {
-        id: profileData.id,
-        email: profileData.email,
-        name: profileData.name,
-        initials: profileData.initials,
-        families: Array.isArray(profileData.families) ? profileData.families : [],
-        currentFamilyId: profileData.current_family_id
-      };
+      const userFamilyIds = userMemberships?.map(m => m.family_id) || [];
+      console.log('🔵 User family IDs from family_members:', userFamilyIds);
 
-      console.log('🔵 Updated user data:', {
-        familiesCount: updatedUser.families.length,
-        currentFamilyId: updatedUser.currentFamilyId
-      });
+      // Try to get current family preference from profiles (but don't fail if RLS blocks it)
+      let currentFamilyIdPreference: string | null = null;
+      try {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('current_family_id')
+          .eq('id', user.id)
+          .single();
+        
+        currentFamilyIdPreference = profileData?.current_family_id || null;
+        console.log('🔵 Current family preference from profile:', currentFamilyIdPreference);
+      } catch (error) {
+        console.log('🟡 Could not get family preference from profile (RLS):', error);
+      }
 
-      // If user has families, refresh them from database
-      if (updatedUser.families && updatedUser.families.length > 0) {
-        console.log('🔄 Fetching families:', updatedUser.families);
+      if (userFamilyIds.length > 0) {
+        console.log('🔄 Fetching families:', userFamilyIds);
         
         const { data: userFamilies, error: familiesError } = await supabase
           .from('families')
           .select('id, name')
-          .in('id', updatedUser.families);
+          .in('id', userFamilyIds);
 
         if (familiesError) {
           console.error('🔴 Error fetching families:', familiesError);
@@ -80,29 +82,39 @@ export const useFamilySync = ({
           };
         }));
 
-        // Find current family or default to first family
+        // Find current family based on preference or default to first family
         let refreshedCurrentFamily: Family | null = null;
-        if (updatedUser.currentFamilyId) {
-          refreshedCurrentFamily = refreshedFamilies.find(f => f.id === updatedUser.currentFamilyId) || null;
+        if (currentFamilyIdPreference && userFamilyIds.includes(currentFamilyIdPreference)) {
+          refreshedCurrentFamily = refreshedFamilies.find(f => f.id === currentFamilyIdPreference) || null;
         }
         
         // If no current family is set but user has families, set the first one as current
         if (!refreshedCurrentFamily && refreshedFamilies.length > 0) {
           refreshedCurrentFamily = refreshedFamilies[0];
           
-          // Update the user's current family in the database
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ current_family_id: refreshedCurrentFamily.id })
-            .eq('id', user.id);
+          // Try to update the user's current family preference (but don't fail if RLS blocks it)
+          try {
+            const { error: updateError } = await supabase
+              .from('profiles')
+              .update({ current_family_id: refreshedCurrentFamily.id })
+              .eq('id', user.id);
 
-          if (updateError) {
-            console.error('🔴 Error setting default current family:', updateError);
-          } else {
-            updatedUser.currentFamilyId = refreshedCurrentFamily.id;
-            console.log('🟢 Set default current family:', refreshedCurrentFamily.name);
+            if (updateError) {
+              console.log('🟡 Could not update current family preference (RLS):', updateError.message);
+            } else {
+              console.log('🟢 Set default current family preference:', refreshedCurrentFamily.name);
+            }
+          } catch (error) {
+            console.log('🟡 Could not update current family preference (RLS):', error);
           }
         }
+
+        // Update user object with actual family data from family_members table
+        const updatedUser: User = {
+          ...user,
+          families: userFamilyIds,
+          currentFamilyId: refreshedCurrentFamily?.id || null
+        };
 
         console.log('🟢 Refreshed families:', {
           familiesCount: refreshedFamilies.length,
@@ -116,6 +128,11 @@ export const useFamilySync = ({
         setCurrentFamily(refreshedCurrentFamily);
       } else {
         console.log('🔵 User has no families');
+        const updatedUser: User = {
+          ...user,
+          families: [],
+          currentFamilyId: null
+        };
         setUser(updatedUser);
         setFamilies([]);
         setCurrentFamily(null);
