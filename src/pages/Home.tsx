@@ -1,17 +1,19 @@
 
-import React from "react";
+import React, { useEffect } from "react";
 import ChoreList from "@/components/home/ChoreList";
 import HomeHeader from "@/components/home/HomeHeader";
 import StatusOverview from "@/components/home/StatusOverview";
+import ShoppingList from "@/components/home/ShoppingList";
 import { useAuth } from "@/hooks/useAuth";
 import { getChoresByFamilyId, getShoppingItemsByFamilyId } from "@/services/database";
 import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integration/supabase/clients";
 
 const Home = () => {
   const { user, currentFamily } = useAuth();
 
   // Query for chores with more aggressive refetching
-  const { data: chores = [], isLoading: choreLoading } = useQuery({
+  const { data: chores = [], isLoading: choreLoading, refetch: refetchChores } = useQuery({
     queryKey: ['chores', currentFamily?.id],
     queryFn: () => currentFamily ? getChoresByFamilyId(currentFamily.id) : [],
     enabled: !!currentFamily,
@@ -22,15 +24,53 @@ const Home = () => {
   });
 
   // Query for shopping items with more aggressive refetching
-  const { data: shoppingItems = [], isLoading: shoppingLoading } = useQuery({
+  const { data: shoppingItems = [], isLoading: shoppingLoading, refetch: refetchShopping } = useQuery({
     queryKey: ['shopping-items', currentFamily?.id],
-    queryFn: () => currentFamily ? getShoppingItemsByFamilyId(currentFamily.id) : [],
+    queryFn: () => {
+      if (!currentFamily) {
+        console.log('🔴 No current family for shopping items query');
+        return [];
+      }
+      console.log('🔵 Fetching shopping items for family:', currentFamily.id);
+      return getShoppingItemsByFamilyId(currentFamily.id);
+    },
     enabled: !!currentFamily,
     staleTime: 1000 * 30, // 30 seconds
     refetchInterval: 1000 * 15, // Refetch every 15 seconds
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
+
+  // Set up real-time subscription for shopping items
+  useEffect(() => {
+    if (!currentFamily?.id) return;
+
+    console.log('🔵 Setting up shopping items subscription for family:', currentFamily.id);
+
+    const subscription = supabase
+      .channel(`shopping-items-home-${currentFamily.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shopping_items',
+          filter: `family_id=eq.${currentFamily.id}`
+        },
+        async (payload) => {
+          console.log('🟢 Shopping item change detected on home:', payload);
+          refetchShopping();
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔵 Shopping items subscription status:', status);
+      });
+
+    return () => {
+      console.log('🔴 Cleaning up shopping items subscription on home');
+      supabase.removeChannel(subscription);
+    };
+  }, [currentFamily?.id, refetchShopping]);
 
   const isLoading = choreLoading || shoppingLoading;
   
@@ -79,7 +119,9 @@ const Home = () => {
     currentFamily: currentFamily?.name,
     membersCount: currentFamily?.members?.length,
     choresCount: chores.length,
-    todaysChoresCount: todaysChores.length
+    todaysChoresCount: todaysChores.length,
+    shoppingItemsCount: shoppingItems.length,
+    user: user?.name
   });
 
   return (
@@ -94,6 +136,11 @@ const Home = () => {
         />
         
         <ChoreList chores={formattedChores} isToday={true} />
+        
+        <ShoppingList 
+          shoppingItems={shoppingItems} 
+          onItemsChange={refetchShopping}
+        />
       </div>
     </div>
   );

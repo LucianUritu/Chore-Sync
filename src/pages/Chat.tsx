@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Send } from "lucide-react";
@@ -128,7 +129,10 @@ const Chat = () => {
   
   // Set up real-time subscription
   useEffect(() => {
-    if (!currentFamily || !user) return;
+    if (!currentFamily?.id || !user?.id) {
+      console.log('🔴 Cannot set up subscription - missing family or user');
+      return;
+    }
     
     console.log('🔵 Setting up real-time subscription for messages');
     
@@ -154,7 +158,7 @@ const Chat = () => {
       console.log('🔴 Cleaning up message subscription');
       supabase.removeChannel(subscription);
     };
-  }, [currentFamily, user]);
+  }, [currentFamily?.id, user?.id]);
   
   // Scroll to bottom when messages change
   useEffect(() => {

@@ -1,14 +1,12 @@
 
-import React, { useState, useEffect } from "react";
-import { Plus, Check, Circle, Trash2 } from "lucide-react";
+import React, { useState } from "react";
+import { Plus, Circle, Check, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integration/supabase/clients";
 import { 
-  getShoppingItemsByFamilyId, 
   saveShoppingItem, 
   toggleShoppingItemComplete, 
   deleteShoppingItem 
@@ -16,76 +14,37 @@ import {
 import type { ShoppingItem } from "@/services/types";
 import { useToast } from "@/hooks/use-toast";
 
-const ShoppingList = () => {
+interface ShoppingListProps {
+  shoppingItems: ShoppingItem[];
+  onItemsChange: () => void;
+}
+
+const ShoppingList = ({ shoppingItems, onItemsChange }: ShoppingListProps) => {
   const { currentFamily, user } = useAuth();
   const { toast } = useToast();
-  const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
   const [newItemName, setNewItemName] = useState("");
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Load shopping items
-  useEffect(() => {
-    if (!currentFamily) return;
-    
-    const loadItems = async () => {
-      try {
-        setIsLoading(true);
-        const items = await getShoppingItemsByFamilyId(currentFamily.id);
-        setShoppingItems(items);
-      } catch (error) {
-        console.error('Error loading shopping items:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load shopping items",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    loadItems();
-  }, [currentFamily, toast]);
-
-  // Set up real-time subscription for shopping items
-  useEffect(() => {
-    if (!currentFamily?.id) return;
-
-    console.log('🔵 Setting up shopping items subscription for family:', currentFamily.id);
-
-    const subscription = supabase
-      .channel(`shopping-items-${currentFamily.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'shopping_items',
-          filter: `family_id=eq.${currentFamily.id}`
-        },
-        async (payload) => {
-          console.log('🟢 Shopping item change detected:', payload);
-          
-          // Reload items to get fresh data
-          try {
-            const items = await getShoppingItemsByFamilyId(currentFamily.id);
-            setShoppingItems(items);
-          } catch (error) {
-            console.error('Error reloading shopping items:', error);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      console.log('🔴 Cleaning up shopping items subscription');
-      supabase.removeChannel(subscription);
-    };
-  }, [currentFamily?.id]);
+  // Show only first 3 items for home view
+  const displayItems = shoppingItems.slice(0, 3);
+  // Sort items: incomplete first, then completed
+  const sortedItems = [...displayItems].sort((a, b) => {
+    if (a.isComplete === b.isComplete) return 0;
+    return a.isComplete ? 1 : -1;
+  });
 
   const handleAddItem = async () => {
-    if (!currentFamily || !user) return;
+    if (!currentFamily || !user) {
+      console.error('🔴 Missing currentFamily or user:', { currentFamily: !!currentFamily, user: !!user });
+      toast({
+        title: "Error",
+        description: "Please make sure you're logged in and have selected a family",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (!newItemName.trim()) {
       toast({
         title: "Error",
@@ -95,8 +54,14 @@ const ShoppingList = () => {
       return;
     }
     
+    setIsLoading(true);
     try {
-      // Save to database - the real-time subscription will update the UI
+      console.log('🔵 Adding shopping item:', {
+        name: newItemName.trim(),
+        familyId: currentFamily.id,
+        userId: user.id
+      });
+
       await saveShoppingItem({
         name: newItemName.trim(),
         familyId: currentFamily.id,
@@ -106,30 +71,34 @@ const ShoppingList = () => {
       
       setNewItemName("");
       setIsAddItemOpen(false);
+      onItemsChange();
       
       toast({
         title: "Success",
         description: "Item added to shopping list",
       });
     } catch (error) {
-      console.error('Error adding shopping item:', error);
+      console.error('🔴 Error adding shopping item:', error);
       toast({
         title: "Error",
-        description: "Failed to add item",
+        description: error instanceof Error ? error.message : "Failed to add item",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleToggleComplete = async (itemId: string) => {
     try {
-      // Update in database - the real-time subscription will update the UI
+      console.log('🔵 Toggling item completion:', itemId);
       await toggleShoppingItemComplete(itemId);
+      onItemsChange();
     } catch (error) {
-      console.error('Error toggling item completion:', error);
+      console.error('🔴 Error toggling item completion:', error);
       toast({
         title: "Error",
-        description: "Failed to update item",
+        description: error instanceof Error ? error.message : "Failed to update item",
         variant: "destructive",
       });
     }
@@ -137,56 +106,44 @@ const ShoppingList = () => {
   
   const handleDeleteItem = async (itemId: string) => {
     try {
-      // Delete from database - the real-time subscription will update the UI
+      console.log('🔵 Deleting item:', itemId);
       await deleteShoppingItem(itemId);
+      onItemsChange();
       
       toast({
         title: "Success",
         description: "Item removed from shopping list",
       });
     } catch (error) {
-      console.error('Error deleting item:', error);
+      console.error('🔴 Error deleting item:', error);
       toast({
         title: "Error",
-        description: "Failed to delete item",
+        description: error instanceof Error ? error.message : "Failed to delete item",
         variant: "destructive",
       });
     }
   };
-  
-  // Sort items: incomplete first, then completed
-  const sortedItems = [...shoppingItems].sort((a, b) => {
-    if (a.isComplete === b.isComplete) return 0;
-    return a.isComplete ? 1 : -1;
-  });
-
-  if (isLoading) {
-    return (
-      <div className="container max-w-md mx-auto p-4 pb-20">
-        <div className="flex items-center justify-center py-8">
-          <div className="text-gray-500">Loading shopping list...</div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="container max-w-md mx-auto p-4 pb-20">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Shopping List</h1>
-        <Button 
-          size="sm" 
-          onClick={() => setIsAddItemOpen(true)}
-          className="flex items-center"
-        >
-          <Plus size={16} className="mr-1" />
-          Add Item
-        </Button>
+    <div className="mb-6">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="font-bold text-lg">Shopping List</h2>
+        <div className="flex items-center space-x-2">
+          <Button 
+            size="sm" 
+            onClick={() => setIsAddItemOpen(true)}
+            className="flex items-center"
+            disabled={isLoading}
+          >
+            <Plus size={16} className="mr-1" />
+            Add Item
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-3">
         {sortedItems.length === 0 ? (
-          <div className="text-center py-6 text-gray-500">
+          <div className="text-center py-4 text-gray-500">
             No items in your shopping list
           </div>
         ) : (
@@ -216,6 +173,12 @@ const ShoppingList = () => {
             </Card>
           ))
         )}
+        
+        {shoppingItems.length > 3 && (
+          <div className="text-center text-sm text-gray-500">
+            +{shoppingItems.length - 3} more items
+          </div>
+        )}
       </div>
       
       <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
@@ -234,9 +197,14 @@ const ShoppingList = () => {
                   handleAddItem();
                 }
               }}
+              disabled={isLoading}
             />
-            <Button onClick={handleAddItem} className="w-full">
-              Add to List
+            <Button 
+              onClick={handleAddItem} 
+              className="w-full"
+              disabled={isLoading || !newItemName.trim()}
+            >
+              {isLoading ? "Adding..." : "Add to List"}
             </Button>
           </div>
         </DialogContent>

@@ -10,7 +10,7 @@ const BottomNavigation = () => {
   const currentPath = location.pathname;
 
   const navItems = [
-    { icon: Home, label: "Home", path: "/" },
+    { icon: Home, label: "Home", path: "/home" },
     { icon: Calendar, label: "Calendar", path: "/calendar" },
     { icon: Users, label: "Roommates", path: "/roommates" },
     { icon: MessageCircle, label: "Chat", path: "/chat" },

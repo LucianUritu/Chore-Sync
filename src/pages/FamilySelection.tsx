@@ -140,22 +140,25 @@ const FamilySelection = () => {
 
       console.log("FamilySelection: Successfully added member to family_members table");
 
-      // Try to update user profile preference - but don't fail if RLS blocks it
+      // Update user profile with the new family in the families array AND set as current
       try {
+        const updatedFamilies = [...(user.families || []), family.id];
+        
         const { error: updateUserError } = await supabase
           .from('profiles')
           .update({ 
+            families: updatedFamilies,
             current_family_id: family.id
           })
           .eq('id', user.id);
 
         if (updateUserError) {
-          console.log('🟡 Could not update user profile preference (RLS), but member was added to family:', updateUserError.message);
+          console.log('🟡 Could not update user profile families array (RLS), but member was added to family:', updateUserError.message);
         } else {
-          console.log("FamilySelection: Successfully updated user profile preference");
+          console.log("FamilySelection: Successfully updated user profile with families array and current family");
         }
       } catch (profileError: any) {
-        console.log('🟡 Profile preference update failed, but member was added to family:', profileError.message);
+        console.log('🟡 Profile families array update failed, but member was added to family:', profileError.message);
       }
 
       toast({

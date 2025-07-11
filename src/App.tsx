@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import BottomNavigation from "./components/layout/BottomNavigation";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -23,7 +23,7 @@ const queryClient = new QueryClient();
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-  const showBottomNav = !["/login", "/signup", "/verify", "/family-selection"].includes(
+  const showBottomNav = !["/login", "/signup", "/verify", "/family-selection", "/"].includes(
     location.pathname
   );
 
@@ -37,76 +37,76 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
 const AppRoutes = () => {
   return (
-    <Routes>
-      {/* Root route redirects based on auth status */}
-      <Route path="/" element={<Index />} />
-      
-      {/* Auth routes */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/verify" element={<VerifyEmail />} />
-      <Route path="/family-selection" element={<FamilySelection />} />
+    <AuthProvider>
+      <AppLayout>
+        <Routes>
+          {/* Root route redirects based on auth status */}
+          <Route path="/" element={<Index />} />
+          
+          {/* Auth routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/verify" element={<VerifyEmail />} />
+          <Route path="/family-selection" element={<FamilySelection />} />
 
-      {/* Protected routes */}
-      <Route 
-        path="/home" 
-        element={
-          <ProtectedRoute>
-            <Home />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/calendar" 
-        element={
-          <ProtectedRoute>
-            <Calendar />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/roommates" 
-        element={
-          <ProtectedRoute>
-            <Roommates />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/chat" 
-        element={
-          <ProtectedRoute>
-            <Chat />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/profile" 
-        element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* NotFound route */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+          {/* Protected routes */}
+          <Route 
+            path="/home" 
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/calendar" 
+            element={
+              <ProtectedRoute>
+                <Calendar />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/roommates" 
+            element={
+              <ProtectedRoute>
+                <Roommates />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/chat" 
+            element={
+              <ProtectedRoute>
+                <Chat />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* NotFound route */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </AppLayout>
+    </AuthProvider>
   );
 };
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AppLayout>
-            <AppRoutes />
-          </AppLayout>
-        </TooltipProvider>
-      </AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <AppRoutes />
+      </TooltipProvider>
     </BrowserRouter>
   </QueryClientProvider>
 );

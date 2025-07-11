@@ -25,7 +25,7 @@ export const useFamilyCreation = ({ user, refreshUserAndFamilies }: FamilyCreati
       const familyId = crypto.randomUUID();
       const joinCode = generateJoinCode();
       
-      console.log('🔵 Creating family:', { name, familyId, joinCode });
+      console.log('🔵 Creating family:', { name, familyId, joinCode, userId: user.id });
 
       // Save family to database first
       const { error: familyError } = await supabase
@@ -47,22 +47,25 @@ export const useFamilyCreation = ({ user, refreshUserAndFamilies }: FamilyCreati
       await addMemberToFamily(familyId, user.id, user.name, user.initials);
       console.log('🟢 Added creator as family member');
 
-      // Try to update user profile preference but don't fail if RLS blocks it
+      // Update user profile with the new family in the families array AND set as current
       try {
+        const updatedFamilies = [...(user.families || []), familyId];
+        
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
+            families: updatedFamilies,
             current_family_id: familyId
           })
           .eq('id', user.id);
 
         if (updateError) {
-          console.log('🟡 Could not update profile preference (RLS), but family was created:', updateError.message);
+          console.log('🟡 Could not update profile families array (RLS), but family was created:', updateError.message);
         } else {
-          console.log('🟢 Updated user profile with new family preference');
+          console.log('🟢 Updated user profile with new family in families array and set as current');
         }
       } catch (profileError: any) {
-        console.log('🟡 Profile preference update failed, but family was created successfully:', profileError.message);
+        console.log('🟡 Profile families array update failed, but family was created successfully:', profileError.message);
       }
 
       // Refresh all data from database to ensure sync
